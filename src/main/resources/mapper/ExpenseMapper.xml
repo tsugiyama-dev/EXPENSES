@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+  
+  <mapper namespace="com.example.expenses.repository.ExpenseMapper">
+  
+  <select id="search" resultType="com.example.expenses.domain.Expense">
+  	SELECT 
+  		id,
+  		applicant_id,
+  		title,
+  		amount,
+  		currency,
+  		status,
+  		submitted_at,
+  		created_at,
+  		updated_at,
+  		version
+  	FROM
+  		expenses
+  	WHERE
+  		1 = 1
+  	<if test="criteria.applicantId != null">
+  		AND applicant_id = #{criteria.applicantId}
+  	</if>
+  	<if test="criteria.title != null and criteria.title != '' ">
+  		AND title LIKE CONCAT('%', #{criteria.title}, '%')
+  	</if>
+  	<if test="criteria.amountMin != null">
+  		AND amount &gt;= #{criteria.amountMin}
+  	</if>
+  	<if test="criteria.amountMax != null">
+  		AND amount &lt;= #{criteria.amountMax}
+  	</if>
+  	<if test="criteria.status != null and criteria.status != ''">
+  		AND status = #{criteria.status}
+  	</if>
+  	<if test="criteria.submittedFrom != null">
+  		AND submitted_at <![CDATA[>=]]> #{criteria.submittedFrom}
+  	</if>
+  	<if test="criteria.submittedTo != null">
+  		AND submitted_at &lt;= #{criteria.submittedTo}
+  	</if>
+  	
+  	ORDER BY ${orderBy} ${direction}
+  	LIMIT #{size} OFFSET  #{offset}  
+  	
+  </select>
+  
+    <select id="count" resultType="long">
+  	SELECT 
+  		count(*)
+  	FROM
+  		expenses
+  	WHERE
+  		1 = 1
+  	<if test="criteria.applicantId != null">
+  		AND applicant_id = #{criteria.applicantId}
+  	</if>
+  	<if test="criteria.title != null and criteria.title != '' ">
+  		AND title LIKE CONCAT('%', #{criteria.title}, '%')
+  	</if>
+  	<if test="criteria.amountMin != null">
+  		AND amount &gt;= #{criteria.amountMin}
+  	</if>
+  	<if test="criteria.amountMax != null">
+  		AND amount &lt;= #{criteria.amountMax}
+  	</if>
+  	<if test="criteria.status != null and criteria.status != ''">
+  		AND status = #{criteria.status}
+  	</if>
+  	<if test="criteria.submittedFrom != null">
+  		AND submitted_at <![CDATA[>=]]> #{criteria.submittedFrom}
+  	</if>
+  	<if test="criteria.submittedTo != null">
+  		AND submitted_at &lt;= #{criteria.submittedTo}
+  	</if>
+  </select>
+  
+  <update id="approve">
+  	UPDATE expenses
+  	SET status = 'APPROVED',
+  		updated_at = NOW(),
+  		version = version + 1
+  	WHERE id = #{id}
+  		AND version = #{version}
+  		AND status = 'SUBMITTED'
+  </update>
+  
+  <update id="reject">
+  	UPDATE expenses
+  	SET status = "REJECTED",
+  		updated_at = NOW(),
+  		version = version + 1
+  	WHERE id = #{id}
+  		AND version = #{version}
+  		AND status = 'SUBMITTED'
+  </update>
+  
+  <select id="filter" resultType="Expense">
+  	SELECT
+  		id,
+  		title,
+  		amount,
+  		currency,
+  		status,
+  		submitted_at,
+  		created_at,
+  		updated_at
+  	FROM expenses
+  	<trim prefix="WHERE" prefixOverrides="AND |OR ">
+  		<if test="criteria.status != ''">
+  			AND status = #{criteria.status}
+  		</if>  	
+  		<if test="criteria.title != null and criteria.title != ''">
+  			AND title LIKE CONCAT('%', #{criteria.title}, '%')
+  		</if>
+  		<if test="criteria.amountMin != null">
+  			AND amount &gt;= #{criteria.amountMin}
+  		</if>
+  		<if test="criteria.amountMax != null">
+  			AND amount &lt;= #{criteria.amountMax}
+  		</if>
+  		<if test="criteria.submittedFrom != null">
+  			AND submitted_at &gt;= #{criteria.submittedFrom}
+  		</if>
+  		<if test="criteria.submittedTo != null">
+  			AND submitted_at &lt;= #{criteria.submittedTo}
+  		</if>
+  	</trim>
+  	ORDER BY
+  	<choose>
+	  	<when test="orderBy == 'title'">
+	  		title
+	  	</when>
+	  	<when test="orderBy == 'submitted_at'">
+	  		submitted_at
+	  	</when>
+	  	<when test="orderBy == 'updated_at'">
+	  		updated_at
+	  	</when>
+	  	<otherwise>
+	  		created_at
+	  	</otherwise>
+  	</choose>
+  	<if test="direction == 'ASC' or direction == 'DESC'">
+  		${direction}
+  	</if>
+
+  		
+  
+  </select>  
+  
+  <resultMap type="com.example.expenses.dto.request.ExpenseSearchCriteria" id="expenseSearchMap">
+  		
+  		<constructor>
+  			<arg column="applicant_id" javaType="Long"/>
+  			<arg column="status" javaType="String"/>
+  			<arg column="title" javaType="String"/>
+  			<arg column="amount" javaType="BigDecimal"/>
+  			<arg column="amount" javaType="BigDecimal"/>
+  			<arg column="submitted_at" javaType="java.time.LocalDateTime"/>
+  			<arg column="submitted_at" javaType="java.time.LocalDateTime"/>
+  		</constructor>
+  </resultMap>
+  
+  
+  
+  </mapper>

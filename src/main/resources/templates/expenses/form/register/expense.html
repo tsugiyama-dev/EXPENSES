@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+	
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<meta charset="UTF-8">
+<title>経費登録</title>
+</head>
+<body>
+	<div th:if="${errorLists}">
+		<div th:each="error : ${errorLists}" th:text="|field：${error.field},エラーメッセージ：${error.message}"></div>
+	</div>
+	
+	<div class="position-relative">
+		<div class="positon-absolute top-0 start-50">
+		経費登録フォーム
+		</div>
+	</div>
+
+	<form th:action="@{/expenses/register/expense}" method="post" th:object="${request}">
+		
+				<div class="d-flex flex-column">
+				<div class="mt-3">
+					<label>タイトル</label>
+					<input class="form-control" type="text" th:field="*{title}">
+				</div>	
+		
+		
+				<div class=" mt-3">
+					<label>金額</label>
+					<input class="form-control" type="number" th:field="*{amount}">
+				</div>
+		
+	
+				<div class=" mt-3">
+					<label>currency</label>
+					<select th:field="*{currency}">
+						<option value="JPY">円</option>
+						<option value="USD">ドル</option>
+						<option value="EUR">ユーロ</option>
+						<option value="CNY">人民元</option>	
+					</select>
+				</div>
+				<input type="hidden" name="actorId" th:value="${actorId}">
+				<div class="mt-3">
+					<button class="btn btn-primary" type="submit">申請する</button>
+				</div>
+				</div>
+	</form>
+	
+</body>
+</html>

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Insert title here</title>
+</head>
+<body>
+	
+	<h2 th:if="${message}" th:text=${message} style="color: green;"></h2>
+	<form th:action="@{/login}" method="post">
+		<div>
+		<label>ユーザーＩＤ</label>
+		<input name="username">
+		</div>
+		<div>
+			<label>パスワード</label>
+			<input type="password" name="password">
+		</div>
+		<button type="submit">ログイン</button>
+	</form>
+
+</body>
+</html>

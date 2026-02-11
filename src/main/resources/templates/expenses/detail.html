@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+	<meta charset="UTF-8">
+	<meta name="_csrf" th:content="${_csrf.token}"/>
+	<meta name="_csrf_header" th:content="${_csrf.headerName}"/>
+<title>経費一覧</title>
+</head>
+<body>
+	<nav class="navbar">
+		<div class="container-fluid">
+			<a class="navbar-brand" href="#">Expenses</a>
+			<button type="button" style="border: none; background-color: transparent;">
+				<a th:href="|@{/expenses/register/expense(actorId=${actorId})}|"
+				 style="text-decoration: none;
+				 	    color: green;">経費登録フォームへ</a></button>
+		</div>
+	</nav>
+	<form th:action="@{/logout}" method="post">
+		<button type="submit" style="border: none; color: red;">ログアウト</button>
+	</form>
+	<p>ログイン中のユーザー：<strong th:text="${username}"></strong></p>
+	
+	<h3 class="text-center">検索</h3>
+	
+	<div class="m-3"  style="background-color: lightgray;">
+		<form  th:object="${criteria}" th:action="@{/expenses/search}" method="get">
+			<div class="container d-flex justify-content-evenly my-3">
+				<div>
+					<label>ユーザーＩＤ</label>
+					<input type="number" th:field="*{applicantId}" placeholder="ユーザーＩＤ">
+				</div>
+				<div>
+					<label>ステータス</label>
+					<select th:field="*{status}">
+						<option value="" selected>--選択してください--</option>
+						<option th:each="status : ${statuses}" 
+						th:text="${status}"
+						th:value="${status}"></option>
+					</select>
+				</div>
+				<div>
+					<label>title</label>
+					<input th:field="*{title}" placeholder="タイトル">
+				</div>	
+				<div>
+					<label>金額（Min)</label>
+					<input type="number" th:field="*{amountMin}">
+				</div>
+			</div>
+			<div class="container d-flex justify-content-evenly mb-3">
+				<div>
+					<label>金額（Max）</label>
+					<input type="number" th:field="*{amountMax}">
+				</div>
+				<div>
+					<label>提出日（From）</label>
+					<input type="date" th:field="*{submittedFrom}">
+				</div>
+				<div>
+					<label>提出日（To）</label>
+					<input type="date" th:field="*{submittedTo}">
+				</div>
+				<div>
+					<label>並び順</label>
+					<select th:field="*{sort}">
+						<option value="">--選択してください--</option>
+						<option th:each="sort : ${sorts}"
+							    th:value=${sort}
+								th:text="${sort}"></option>
+					</select>
+				</div>			
+			</div>
+			<button class="btn btn-success d-block mx-auto my-3" type="submit">検索</button>
+		</form>
+	</div>
+
+	
+
+	<h3 class="m-3 text-center">経費一覧</h3>
+	<button type="submit" class="btn btn-primary" >
+		<a th:href="@{/expenses/csv(
+				applicantId=${criteria.applicantId},
+				status=${criteria.status},
+				title=${criteria.title},
+				amountMin=${criteria.amountMin},
+				amountMax=${criteria.amountMax},
+				submittedFrom=${criteria.submittedFrom},
+				submittedTo=${criteria.submittedTo}
+			)}"
+			 style="color: white;">csvダウンロード
+		 </a>
+	</button>
+	
+	<hr>
+	<div th:if="${message != null}">
+		<p ><strong th:text="${message}" style="color: forestgreen;"></strong></p>
+	</div>
+	<div th:if="${alert != null}">
+		<p ><strong th:text="${alert}" style="color: orangered;"></strong></p>
+	</div>
+	<div th:if="${errorMessage}">
+		<ul>
+			<li  th:each="e : ${errorList}" th:text="${e}"></li>
+		</ul>
+	</div>
+	
+	<div id="errorbox" class="alert alert-danger d-none"></div>
+
+
+	<table class="table align-middle">
+		<thead>
+			<tr>
+				<th>applicantId</th>
+				<th>title</th>
+				<th>amount</th>
+				<th>currency</th>
+				<th>status</th>
+				<th>submittedAt</th>
+				<th>createdAt</th>
+				<th>updatedAt</th>
+				<th>nextAction</th>
+			</tr>	
+		</thead>
+		<tbody>
+			<tr th:each="expense : ${expense.items()}">
+				<td class="" th:text="${expense.applicantId}"></td>
+				<td class="" th:text="${expense.title}"></td>
+				<td class="" th:text="${#numbers.formatDecimal(expense.amount, 0, 'COMMA', 0, 'POINT')}"></td>
+				<td class="" th:text="${expense.currency}"></td>
+				<td class="badge"
+					th:classappend="${expense.status.name() == 'APPROVED'} ? 'bg-success' :
+					(${expense.status.name() == 'SUBMITTED'} ? 'bg-danger' : 
+					(${expense.status.name() == 'REJECTED'} ? 'bg-warning text-dark' : 'bg-secondary'))"
+					th:text="${expense.status}">
+				</td>
+				<td th:text="${#temporals.format(expense.submittedAt, 'yyyy-MM-dd HH:mm')}"></td>
+				<td th:text="${#temporals.format(expense.createdAt, 'yyyy-MM-dd HH:mm')}"></td>
+				<td th:text="${#temporals.format(expense.updatedAt, 'yyyy-MM-dd HH:mm')}"></td>
+				<td>
+						<div th:if="${expense.status.name() == 'DRAFT'}">
+							<form th:action="@{|/expenses/submit/${expense.id}|}" method="post">
+							<button type="submit">提出</button>
+						</div>
+						<span th:if="${expense.status.name() == 'SUBMITTED' and #lists.contains(roles, 'ROLE_APPROVER')}">
+						
+						<form class="m-3 approve" th:action="@{|/expenses/approve/${expense.id}|(version=${expense.version})}"
+							 method="post" th:attr="data-expense-id=${expense.id}">
+							 	
+							<input class="" placeholder="入力不可" disabled></input>
+							<button class="btn btn-primary" type="submit" th:attr="data-original-text='承認'">承認</button>
+						
+						</form>
+						</span>
+												
+						<span th:if="${expense.status.name() == 'SUBMITTED' and #lists.contains(roles, 'ROLE_APPROVER')}">
+								
+							<form class="m-3 reject" th:action="@{'/expenses/reject/'+ ${expense.id}(version=${expense.version})}"
+							 method="post" th:object="${rejectRequest}" th:attr="data-expense-id=${expense.id}">
+							 
+								<input class="" th:field="*{reason}" placeholder="却下理由を入力してください"></input>
+								<button class="btn btn-secondary"  th:attr="data-original-text='却下'" type="submit">却下</button>
+								 
+								<div th:if="${#fields.hasErrors('reason')}" th:errors="*{reason}"></div>
+							</form>
+						</span>						
+	
+					</form>
+
+				</td>
+					
+			</tr>
+		</tbody>
+	</table>
+	<div class="container">
+			<div class="d-flex justify-content-center" th:if="${#lists.size(expense.pageNumbers) > 0}">
+				<div th:each="page :${expense.pageNumbers}">
+					<a 
+						th:class="${page == expense.currentPage} ? 'btn btn-secondary disabled'"
+				       th:if="${page == expense.currentPage}"
+					   th:text="${page}">
+					</a>
+			
+					<a class="btn btn-primary"
+				       th:if="${page != expense.currentPage}"
+					   th:href="@{/expenses/search(
+								page=${page},
+								pageSize=${expense.pageSize},
+								applicantId=${criteria.applicantId},
+								status=${criteria.status},
+								title=${criteria.title},
+								sort=${criteria.sort},
+								amountMin=${criteria.amountMin},
+								amountMax=${criteria.amountMax},
+								submittedFrom=${criteria.submittedFrom},
+								submittedTo=${criteria.submittedTo})}"
+								th:text=${page}>
+<!--								criteria=${criteria})動作不安定のため使用不可-->
+<!--								criteria=${criteria}でまとめてリクエストできる-->
+<!--	>-->
+					</a>
+				</div>	 
+			</div>
+	</div>
+	
+	<a th:href="@{/expenses/log/list}">ログ一覧へ</a>
+	
+	<script>
+		const approveForms = document.querySelectorAll('.approve');
+        const rejectForms = document.querySelectorAll('.reject');
+		
+		approveForms.forEach(form => {
+			form.addEventListener('submit',function(event) {
+				event.preventDefault();
+				
+				//thisはaddEventListenerのコールバック関数内ではform要素を指す
+				//event.targetでも同じ
+				if(!confirm('この経費を承認しますか？')) {
+                    return;
+                }
+				//functionの場合は、thisはform要素
+				//アロー関数の場合は、thisは外側のスコープを参照するため注意
+				const expenseId = this.dataset.expenseId;
+				const url = new URL(this.action);
+				const btn = this.querySelector('button[type="submit"]');
+
+				const headers = {};
+				const token = document.querySelector('meta[name="_csrf"]').content;
+				const header = document.querySelector('meta[name="_csrf_header"]').content;
+			    headers[header] = token;
+				
+				btn.disabled = true; //多重送信防止
+				btn.dataset.originalText = btn.textContent;
+				btn.textContent = '処理中...';
+				
+				
+				fetch(this.action , {
+					method:'POST',
+			        headers
+					
+				}).then(response => {
+                    if(response.ok) {
+						location.reload();
+                        return;
+                    } else {
+                        alert('経費の承認に失敗しました。');
+						btn.disabled = false;
+						btn.textContent = btn.dataset.originalText;
+                    }
+                }).catch(error => {
+                    alert('通信エラーが発生しました。');
+                });
+				
+			});
+		});
+		
+		rejectForms.forEach(form => {
+			form.addEventListener('submit', function(event) {
+				event.preventDefault();
+				
+				if(!confirm('この経費を却下しますか')) {
+					return;
+				}
+				const expenseId = this.dataset.expenseId;
+				
+				const btn = this.querySelector('button[type="submit"]');
+				const headers = {};
+				const token = document.querySelector('meta[name="_csrf"]').content;
+				const header = document.querySelector('meta[name="_csrf_header"]').content;
+				headers[header] = token;
+				
+				btn.disabled = true; //多重送信防止
+				btn.dataset.originalText = btn.textContent;
+				btn.textContent = '処理中...';
+				const formData = new FormData(this);
+				
+				fetch(this.action, {
+					method:'POST',
+					headers,
+					body:formData
+				})
+				.then(response => {
+					if(response.ok) {
+						location.reload();
+						return;
+					} else {
+						response.json().then(data => {
+							data.errors.forEach(error => {
+                        btn.disabled = false;
+                        btn.textContent = btn.dataset.originalText;
+					}})
+				.catch(error => {
+					alert('通信エラーが発生しました。');
+				})
+			})
+		})
+			   
+		</script>
+		  
+</body>
+				

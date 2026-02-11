@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+  
+  <mapper namespace="com.example.expenses.repository.UserMapper">
+  
+  <select id="findByEmail" 
+  		resultType="com.example.expenses.domain.User" resultMap="userMap">
+  	SELECT u.id, u.email, u.password, r.id as role_id, r.user_id, r.role
+  	FROM users u
+  	LEFT JOIN roles r ON u.id = r.user_id
+  	WHERE u.email = #{email}
+  </select>
+  
+  <resultMap type="com.example.expenses.domain.User" id="userMap">
+  	<id property="id" column="id"/>
+  	<result property="email" column="email"/>
+  	<result property="password" column="password"/>
+  	
+  	<collection property="roles" javaType="java.util.List" ofType="com.example.expenses.domain.Role">
+  		<id property="id" column="role_id"/>
+  		<result property="userId" column="user_id"/>
+  		<result property="role" column="role"/>
+  		<result property="createdAt" column="created_at"/>
+  		<result property="updatedAt" column="updated_at"/>
+  	</collection>
+  
+  </resultMap>
+  
+  
+  </mapper>
