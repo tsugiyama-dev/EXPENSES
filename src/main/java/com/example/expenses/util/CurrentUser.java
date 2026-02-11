@@ -32,15 +32,9 @@ public final class CurrentUser {
 		var principal = auth.getPrincipal();
 		
 		if(principal instanceof LoginUser loginUser) {
-			return 
-					loginUser.getAuthorities().stream()
+			return loginUser.getAuthorities().stream()
 					.map(a -> a.getAuthority())
 					.toList();
-//			.map(r -> {
-//				var role = new Role ();
-//				role.setRole(r);
-//				return role;
-//			}).toList();
 		}
 		log.info("ログイン不可 principal={}", principal);
 		
@@ -59,11 +53,11 @@ public final class CurrentUser {
 		throw new IllegalStateException("ログインユーザーを取得できません");
 	}
 	public static boolean is403(long actorId) {
-		
-		boolean isAdmin = actorRole()
-				.contains(List.of("ROLE_ADMIN", "ROLE_APPROVER"));
-		boolean isOwner = Objects.equals(actorId(),actorId);
-		
+
+		List<String> roles = actorRole();
+		boolean isAdmin = roles.contains("ROLE_ADMIN") || roles.contains("ROLE_APPROVER");
+		boolean isOwner = Objects.equals(actorId(), actorId);
+
 		return !isAdmin && !isOwner;
 	}
 }

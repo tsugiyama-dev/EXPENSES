@@ -27,9 +27,6 @@ public class ExpenseAuditLogViewController {
 	public String show(Model model,
 			@AuthenticationPrincipal LoginUser user) {
 		
-		if(user.getUserId() == null) {
-			
-		}
 		List<ExpenseAuditLog> logs = expenseAuditLogService.getOwnerLogs(user.getUserId());
 		
 		model.addAttribute("expenseLogs",logs);
