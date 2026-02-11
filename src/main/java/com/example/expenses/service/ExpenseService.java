@@ -61,7 +61,11 @@ public class ExpenseService {
 	}
 	
 	
-	public PaginationResponse<ExpenseResponse> search(ExpenseSearchCriteria criteria, int currentPage, int pageSize,Long actorId,
+	public PaginationResponse<ExpenseResponse> search(
+			ExpenseSearchCriteria criteria,
+			int currentPage,
+			int pageSize,
+			Long actorId,
 			List<String> roles) {
 		
 		
@@ -122,7 +126,7 @@ public class ExpenseService {
 		auditLogMapper.insert(ExpenseAuditLog.createDraft(expenseId, CurrentUser.actorId(), traceId()));
 		
 		//申請者へメール送信処理
-		notificationService.notifySubmitted(getAddressDstToAdmin(), expenseId, traceId());
+		notificationService.notifySubmitted(getApproverAddress(), expenseId, traceId());
 		
 		
 		Expense saved = expenseMapper.findById(expenseId);
@@ -131,24 +135,35 @@ public class ExpenseService {
 	
 	//submitted → approve
 	@Transactional
-	public ExpenseResponse approve(long expenseId, int version) {
+	public ExpenseResponse approve(long expenseId, int version, Long actorId) {
 		
 		Expense expense = expenseMapper.findById(expenseId);
 		
+		//存在確認
 		if(expense == null) {
-			throw new  NoSuchElementException("Not Found Element: " + expenseId);
+			throw new BusinessException("NOT_FOUND", "経費申請が見つかりません: EXPENSEID ：" + expenseId, traceId());
 		}
-				
-		int updated = expenseMapper.approve(expenseId, version);
-		if(updated == 0) {
+		
+		//ステータス確認
+		if(expense.getStatus() != ExpenseStatus.SUBMITTED) {
 			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は承認できません", traceId());
 		}
+		//楽観的ロック確認
+		if(expense.getVersion()!= version) {
+			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId());
+		}
+		//承認処理
+		int updated = expenseMapper.approve(expenseId, version);
+		if(updated == 0) {
+//			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は承認できません", traceId());
+			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId());
+		}
+		//監査ログ登録
+		auditLogMapper.insert(ExpenseAuditLog.createApprove(expenseId, actorId, traceId()));
 		
-		auditLogMapper.insert(ExpenseAuditLog.createApprove(expenseId,CurrentUser.actorId(),traceId()));
-		
-		//approverへメール通知処理
+		//申請者へメール通知処理
 		try {
-			notificationService.notifyApproved(getAddressDstToUser(expense.getApplicantId()), expenseId, traceId());
+			notificationService.notifyApproved(getApplicantAddress(expense.getApplicantId()), expenseId, traceId());
 			
 		}catch(Exception e) {
 			log.warn("mail failed traceId={} expenseId={}", traceId(), expenseId, e);
@@ -162,22 +177,35 @@ public class ExpenseService {
 	
 	//submitted → reject
 	@Transactional
-	public ExpenseResponse reject(long expenseId, String reason, int version) {
+	public ExpenseResponse reject(long expenseId, String reason, int version, Long actorId) {
 		
 		String traceId = traceId();
-		long applicantId = expenseMapper.findById(expenseId).getApplicantId();
+		Expense expense = expenseMapper.findById(expenseId);
 		
-		int updated = expenseMapper.reject(expenseId, version);
-		if(updated == 0) {
-			throw new BusinessException("INVALID_STATUS_TRANSITION",
-					"提出済以外は却下できません",
-					traceId);
+		//存在確認
+		if(expense == null) {
+			throw new BusinessException("NOT_FOUND", "経費申請が見つかりません: EXPENSEID ：" + expenseId, traceId);
 		}
+		//ステータス確認
+		if(expense.getStatus() != ExpenseStatus.SUBMITTED) {
+			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は却下できません", traceId);	
+		}
+		//楽観的ロック確認
+		if(expense.getVersion() != version) {
+			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId);
+		}
+		//却下処理
+		int updated = expenseMapper.reject(expenseId, version);
 		
-		auditLogMapper.insert(ExpenseAuditLog.createReject(expenseId, applicantId, traceId, reason));
+		if(updated == 0) {
+			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId);
+		}
+		//監査ログ登録
+		auditLogMapper.insert(ExpenseAuditLog.createReject(expenseId, actorId, traceId, reason));
 		
+		//申請者へメール通知処理
 		try{
-			notificationService.notifyRejected(getAddressDstToUser(applicantId), expenseId, reason, traceId);
+			notificationService.notifyRejected(getApplicantAddress(expense.getApplicantId()), expenseId, reason, traceId);
 		}catch(Exception e) {
 			log.warn("mail failed traceId={} expenseId={}", traceId(), expenseId, e);
 		}
@@ -202,10 +230,10 @@ public class ExpenseService {
 		return tid == null ? "" : tid;
 	}
 	
-	private String getAddressDstToUser(long id) {
-		return userMapper.findEmailById(id);
+	private String getApplicantAddress(Long applicantId) {
+		return userMapper.findEmailById(applicantId);
 	}
-	private String getAddressDstToAdmin() {
+	private String getApproverAddress() {
 		return userMapper.findAnyApproverEmail();
 	}
 	

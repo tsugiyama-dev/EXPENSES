@@ -56,7 +56,7 @@ public class ExpenseVeiwController {
 			RedirectAttributes redirect,
 			@AuthenticationPrincipal LoginUser user) {
 		
-		expenseService.approve(expenseId, version);
+		expenseService.approve(expenseId, version, user.getUserId());
 		redirect.addFlashAttribute("message", "承認しました");
 		
 		return "redirect:/expenses/list";
@@ -83,7 +83,7 @@ public class ExpenseVeiwController {
 		PaginationResponse<ExpenseResponse> expenses = expenseService.search(criteria, page, pageSize,
 				user.getUserId(),conversionType(user.getRoles()));
 		
-		expenseService.reject(expenseId, request.getReason(), version);
+		expenseService.reject(expenseId, request.getReason(), version, user.getUserId());
 		redirect.addAttribute("rejectRequest", new RejectRequest());
 		redirect.addAttribute("criteria", criteria);
 		redirect.addAttribute("expense", expenses);
