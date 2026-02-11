@@ -26,19 +26,17 @@ public class ExpenseViewService {
 	
 
 	public Expense getDetails(Long expenseId) {
-	
-		Expense ex = expenseMapper.findById(expenseId);
-		
-		if(CurrentUser.is403(ex.getApplicantId())) {
-			throw new BusinessException("403 Forbidden","本人以外取得できません");
-		}
-		
-		var expense = expenseMapper.findById(expenseId);
+
+		Expense expense = expenseMapper.findById(expenseId);
 		if(expense == null) {
 			throw new NoSuchElementException("Not Found expenseId：" + expenseId);
 		}
-		
-		return expenseMapper.findById(expenseId);
+
+		if(CurrentUser.is403(expense.getApplicantId())) {
+			throw new BusinessException("403 Forbidden","本人以外取得できません");
+		}
+
+		return expense;
 	}
 	
 	public List<ExpenseAuditLog> getLogs(Long expenseId) {
