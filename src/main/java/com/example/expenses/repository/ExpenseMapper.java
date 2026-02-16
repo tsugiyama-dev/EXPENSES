@@ -1,7 +1,11 @@
 package com.example.expenses.repository;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
+import org.apache.ibatis.annotations.Arg;
+import org.apache.ibatis.annotations.ConstructorArgs;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
@@ -10,6 +14,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import com.example.expenses.domain.Expense;
+import com.example.expenses.domain.ExpenseStatus;
 import com.example.expenses.dto.request.ExpenseSearchCriteriaEntity;
 
 @Mapper
@@ -25,6 +30,18 @@ public interface ExpenseMapper {
 	@Options(useGeneratedKeys = true, keyProperty = "id")
 	void insert (Expense expense);
 	
+	@ConstructorArgs({
+		@Arg(column = "id", javaType = Long.class, id = true),
+		@Arg(column = "applicant_id", javaType = Long.class),
+		@Arg(column = "title", javaType = String.class),
+		@Arg(column = "amount", javaType = BigDecimal.class),
+		@Arg(column = "currency", javaType = String.class),
+		@Arg(column = "status", javaType = ExpenseStatus.class),
+		@Arg(column = "submitted_at", javaType = LocalDateTime.class),
+		@Arg(column = "created_at", javaType = LocalDateTime.class),
+		@Arg(column = "updated_at", javaType = LocalDateTime.class),
+		@Arg(column = "version", javaType = int.class)
+	})
 	@Select("""
 			SELECT id, applicant_id, title, amount, currency, status,
 			submitted_at, created_at, updated_at, version
@@ -55,6 +72,18 @@ public interface ExpenseMapper {
 	int reject(@Param("id")long id, @Param("version") int version);
 
 	
+	@ConstructorArgs({
+		@Arg(column = "id", javaType = Long.class, id = true),
+		@Arg(column = "applicant_id", javaType = Long.class),
+		@Arg(column = "title", javaType = String.class),
+		@Arg(column = "amount", javaType = BigDecimal.class),
+		@Arg(column = "currency", javaType = String.class),
+		@Arg(column = "status", javaType = ExpenseStatus.class),
+		@Arg(column = "submitted_at", javaType = LocalDateTime.class),
+		@Arg(column = "created_at", javaType = LocalDateTime.class),
+		@Arg(column = "updated_at", javaType = LocalDateTime.class),
+		@Arg(column = "version", javaType = int.class)
+	})
 	@Select("""
 			SELECT id, applicant_id, title, amount, currency, status,
 			submitted_at, created_at, updated_at, version
