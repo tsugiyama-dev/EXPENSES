@@ -1,30 +1,52 @@
-# リッチドメインモデル - 正しい実装（修正版）
+# リッチドメインモデル - コンストラクタマッピング実装版
 
-## 🚨 重要な修正点
+## 🎯 実装アプローチ
 
-ご指摘の通り、以前のコードには**設計上の矛盾**がありました：
-
-1. **バージョン管理の重複**: ドメインとSQLの両方でversion++していた
-2. **ステータス更新の無意味さ**: ドメインでstatusを変更してもSQLが固定値を使っていた
-3. **UPSERT的な不自然さ**: ドメインで状態を作るのにSQLが特定操作専用だった
-
-この修正版では**真のリッチドメインモデル**を実装します。
-
----
-
-## ✅ 正しい実装
+このドキュメントでは、**コンストラクタマッピング**を使ったリッチドメインモデルの実装方法を説明します。
 
 ### 設計思想
 
-**ドメインが真実の源泉（Single Source of Truth）**
+**完全なカプセル化とイミュータビリティ**
 
-- ドメインで完全に状態を管理
-- SQLは汎用的な更新処理
-- ドメインの状態をそのまま永続化
+- ✅ publicなsetterを一切持たない
+- ✅ MyBatisはコンストラクタ経由でオブジェクトを生成
+- ✅ ビジネスロジックはドメイン内に実装
+- ✅ 不正な状態遷移を防ぐ
 
 ---
 
-## 1. ドメインエンティティ（完全版）
+## 📌 package-privateなsetterではなくコンストラクタマッピングを選んだ理由
+
+### ❌ package-privateなsetterの問題点
+
+```java
+// package-privateなsetter
+void setStatus(ExpenseStatus status) { this.status = status; }
+```
+
+**問題:**
+1. MyBatisが同じパッケージにないとアクセスできない
+2. ドメインモデルをrepository層に移動する必要がある（アーキテクチャ違反）
+3. 完全なカプセル化ではない
+
+### ✅ コンストラクタマッピングのメリット
+
+```java
+@AllArgsConstructor  // 全フィールドのコンストラクタ
+public class Expense {
+    // setterなし！
+}
+```
+
+**メリット:**
+1. ✅ setterが一切存在しない（完全カプセル化）
+2. ✅ イミュータブルなオブジェクト
+3. ✅ ドメイン層をそのまま維持できる
+4. ✅ MyBatisが`@ConstructorArgs`や`<constructor>`でマッピング
+
+---
+
+## 1. ドメインエンティティ（コンストラクタマッピング版）
 
 ```java
 // src/main/java/com/example/expenses/domain/Expense.java
@@ -32,18 +54,20 @@ package com.example.expenses.domain;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * 経費エンティティ（リッチドメインモデル）
+ * 経費エンティティ（リッチドメインモデル - コンストラクタマッピング版）
  *
  * 重要な設計原則:
- * 1. ドメインが状態の真実の源泉
- * 2. ビジネスロジックはドメイン内に実装
- * 3. 不正な状態遷移を防ぐ
- * 4. バージョン管理もドメインで行う
+ * 1. setterを一切持たない（完全カプセル化）
+ * 2. コンストラクタ経由でのみオブジェクト生成
+ * 3. ビジネスロジックはドメイン内に実装
+ * 4. 不正な状態遷移を防ぐ
  */
 @Getter
+@AllArgsConstructor  // 全フィールドのコンストラクタを自動生成
 public class Expense {
     private Long id;
     private Long applicantId;
@@ -57,11 +81,11 @@ public class Expense {
     private int version;
 
     /**
-     * 経費を新規作成（ファクトリーメソッド）
+     * 下書き状態の経費を作成（ファクトリーメソッド）
      * 必ず下書き状態で作成される
      */
-    public static Expense create(Long applicantId, String title,
-                                BigDecimal amount, String currency) {
+    public static Expense createDraft(Long applicantId, String title,
+                                      BigDecimal amount, String currency) {
         // バリデーション
         if (applicantId == null) {
             throw new IllegalArgumentException("申請者IDは必須です");
@@ -73,100 +97,37 @@ public class Expense {
             throw new IllegalArgumentException("金額は正の数である必要があります");
         }
 
-        Expense expense = new Expense();
-        expense.applicantId = applicantId;
-        expense.title = title;
-        expense.amount = amount;
-        expense.currency = currency != null ? currency : "JPY";
-        expense.status = ExpenseStatus.DRAFT;  // 必ず下書きから開始
-        expense.version = 0;                   // 初期バージョン
-        expense.createdAt = LocalDateTime.now();
-        expense.updatedAt = LocalDateTime.now();
-
-        return expense;
+        LocalDateTime now = LocalDateTime.now();
+        return new Expense(
+            null,                    // idはDBが自動採番
+            applicantId,
+            title,
+            amount,
+            currency != null ? currency : "JPY",
+            ExpenseStatus.DRAFT,     // 必ず下書きから開始
+            null,                    // submittedAtは提出時に設定
+            now,                     // createdAt
+            now,                     // updatedAt
+            0                        // 初期バージョン
+        );
     }
 
     /**
-     * 経費を提出
-     * ビジネスルール: 下書き状態のみ提出可能
-     *
-     * 重要: このメソッドでversionを加算する
-     * SQLでは加算しない（ドメインの値をそのまま使う）
+     * 提出可能かチェック
      */
-    public void submit() {
-        // ビジネスルールチェック
-        if (this.status != ExpenseStatus.DRAFT) {
-            throw new IllegalStateException(
-                String.format("下書き状態の経費のみ提出可能です。現在: %s", this.status)
-            );
-        }
-
-        // 状態を完全に更新
-        this.status = ExpenseStatus.SUBMITTED;
-        this.submittedAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
-        this.version++;  // ドメインでバージョン管理
+    public boolean canBeSubmitted() {
+        return this.status == ExpenseStatus.DRAFT;
     }
 
     /**
-     * 経費を承認
-     * ビジネスルール: 提出済み状態のみ承認可能
-     *
-     * 重要: このメソッドでversionを加算する
-     * ドメインの状態がデータベースにそのまま反映される
-     */
-    public void approve() {
-        if (this.status != ExpenseStatus.SUBMITTED) {
-            throw new IllegalStateException(
-                String.format("提出済みの経費のみ承認可能です。現在: %s", this.status)
-            );
-        }
-
-        // 状態を完全に更新
-        this.status = ExpenseStatus.APPROVED;
-        this.updatedAt = LocalDateTime.now();
-        this.version++;  // バージョン加算
-    }
-
-    /**
-     * 経費を却下
-     * ビジネスルール: 提出済み状態のみ却下可能
-     *
-     * @param reason 却下理由（必須）
-     */
-    public void reject(String reason) {
-        if (this.status != ExpenseStatus.SUBMITTED) {
-            throw new IllegalStateException(
-                String.format("提出済みの経費のみ却下可能です。現在: %s", this.status)
-            );
-        }
-        if (reason == null || reason.isBlank()) {
-            throw new IllegalArgumentException("却下理由は必須です");
-        }
-
-        // 状態を完全に更新
-        this.status = ExpenseStatus.REJECTED;
-        this.updatedAt = LocalDateTime.now();
-        this.version++;  // バージョン加算
-    }
-
-    /**
-     * 指定ユーザーが提出可能か
-     */
-    public boolean canBeSubmittedBy(Long userId) {
-        return this.applicantId.equals(userId) &&
-               this.status == ExpenseStatus.DRAFT;
-    }
-
-    /**
-     * 承認可能な状態か
+     * 承認可能かチェック
      */
     public boolean canBeApproved() {
         return this.status == ExpenseStatus.SUBMITTED;
     }
 
     /**
-     * 却下可能な状態か
+     * 却下可能かチェック
      */
     public boolean canBeRejected() {
         return this.status == ExpenseStatus.SUBMITTED;
@@ -190,32 +151,137 @@ public class Expense {
         return this.submittedAt.isBefore(LocalDateTime.now().minusDays(30));
     }
 
-    // MyBatis用のpackage-private setter
-    // データベースからの読み込み時のみ使用
-    void setId(Long id) { this.id = id; }
-    void setApplicantId(Long applicantId) { this.applicantId = applicantId; }
-    void setTitle(String title) { this.title = title; }
-    void setAmount(BigDecimal amount) { this.amount = amount; }
-    void setCurrency(String currency) { this.currency = currency; }
-    void setStatus(ExpenseStatus status) { this.status = status; }
-    void setSubmittedAt(LocalDateTime submittedAt) { this.submittedAt = submittedAt; }
-    void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-    void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
-    void setVersion(int version) { this.version = version; }
+    /**
+     * 指定ユーザーが提出可能か
+     */
+    public boolean canBeSubmittedBy(Long userId) {
+        return this.applicantId.equals(userId) && canBeSubmitted();
+    }
 }
 ```
 
+### 🔑 重要ポイント
+
+1. **`@AllArgsConstructor`**: 全フィールドのコンストラクタを自動生成
+2. **setterなし**: 外部から状態を変更できない
+3. **ファクトリメソッド**: `createDraft()`で安全にオブジェクト生成
+4. **ビジネスメソッド**: `canBeSubmitted()`などでビジネスルールをカプセル化
+
 ---
 
-## 2. Repository（汎用更新メソッド）
+## 2. MyBatisのコンストラクタマッピング設定
+
+### 2.1 XMLマッピング（ExpenseMapper.xml）
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.expenses.repository.ExpenseMapper">
+
+  <!-- コンストラクタマッピング用のresultMap -->
+  <resultMap id="expenseResultMap" type="com.example.expenses.domain.Expense">
+    <constructor>
+      <idArg column="id" javaType="Long"/>
+      <arg column="applicant_id" javaType="Long"/>
+      <arg column="title" javaType="String"/>
+      <arg column="amount" javaType="java.math.BigDecimal"/>
+      <arg column="currency" javaType="String"/>
+      <arg column="status" javaType="com.example.expenses.domain.ExpenseStatus"/>
+      <arg column="submitted_at" javaType="java.time.LocalDateTime"/>
+      <arg column="created_at" javaType="java.time.LocalDateTime"/>
+      <arg column="updated_at" javaType="java.time.LocalDateTime"/>
+      <arg column="version" javaType="int"/>
+    </constructor>
+  </resultMap>
+
+  <!-- 検索クエリ（resultMapを使用） -->
+  <select id="search" resultMap="expenseResultMap">
+    SELECT
+      id, applicant_id, title, amount, currency, status,
+      submitted_at, created_at, updated_at, version
+    FROM expenses
+    WHERE 1 = 1
+    <if test="criteria.applicantId != null">
+      AND applicant_id = #{criteria.applicantId}
+    </if>
+    <if test="criteria.title != null and criteria.title != ''">
+      AND title LIKE CONCAT('%', #{criteria.title}, '%')
+    </if>
+    <!-- 省略 -->
+    ORDER BY ${orderBy} ${direction}
+    LIMIT #{size} OFFSET #{offset}
+  </select>
+
+  <!-- フィルタークエリ -->
+  <select id="filter" resultMap="expenseResultMap">
+    SELECT
+      id, applicant_id, title, amount, currency, status,
+      submitted_at, created_at, updated_at, version
+    FROM expenses
+    <trim prefix="WHERE" prefixOverrides="AND |OR ">
+      <if test="criteria.status != ''">
+        AND status = #{criteria.status}
+      </if>
+      <!-- 省略 -->
+    </trim>
+    ORDER BY
+    <choose>
+      <when test="orderBy == 'title'">title</when>
+      <when test="orderBy == 'submitted_at'">submitted_at</when>
+      <when test="orderBy == 'updated_at'">updated_at</when>
+      <otherwise>created_at</otherwise>
+    </choose>
+    <if test="direction == 'ASC' or direction == 'DESC'">
+      ${direction}
+    </if>
+  </select>
+
+</mapper>
+```
+
+### 📚 XML学習ポイント
+
+**`<constructor>`タグの仕組み:**
+
+```xml
+<constructor>
+  <idArg column="id" javaType="Long"/>      <!-- 主キー -->
+  <arg column="applicant_id" javaType="Long"/>  <!-- 通常フィールド -->
+  <!-- ... -->
+</constructor>
+```
+
+- `<idArg>`: 主キーカラム
+- `<arg>`: 通常のカラム
+- **引数の順番**: `@AllArgsConstructor`のフィールド宣言順と一致させる
+- **javaType**: 完全修飾名またはシンプル名
+
+---
+
+### 2.2 アノテーションマッピング（ExpenseMapper.java）
 
 ```java
-// src/main/java/com/example/expenses/repository/ExpenseMapper.java
 package com.example.expenses.repository;
 
-import com.example.expenses.domain.Expense;
-import org.apache.ibatis.annotations.*;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
+
+import org.apache.ibatis.annotations.Arg;
+import org.apache.ibatis.annotations.ConstructorArgs;
+import org.apache.ibatis.annotations.Insert;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Options;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
+
+import com.example.expenses.domain.Expense;
+import com.example.expenses.domain.ExpenseStatus;
+import com.example.expenses.dto.request.ExpenseSearchCriteriaEntity;
 
 @Mapper
 public interface ExpenseMapper {
@@ -225,16 +291,28 @@ public interface ExpenseMapper {
      */
     @Insert("""
         INSERT INTO expenses
-            (applicant_id, title, amount, currency, status, version)
+            (applicant_id, title, amount, currency, status)
         VALUES
-            (#{applicantId}, #{title}, #{amount}, #{currency}, #{status}, #{version})
+            (#{applicantId}, #{title}, #{amount}, #{currency}, #{status})
         """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     void insert(Expense expense);
 
     /**
-     * IDで経費を取得
+     * IDで経費を取得（コンストラクタマッピング）
      */
+    @ConstructorArgs({
+        @Arg(column = "id", javaType = Long.class, id = true),
+        @Arg(column = "applicant_id", javaType = Long.class),
+        @Arg(column = "title", javaType = String.class),
+        @Arg(column = "amount", javaType = BigDecimal.class),
+        @Arg(column = "currency", javaType = String.class),
+        @Arg(column = "status", javaType = ExpenseStatus.class),
+        @Arg(column = "submitted_at", javaType = LocalDateTime.class),
+        @Arg(column = "created_at", javaType = LocalDateTime.class),
+        @Arg(column = "updated_at", javaType = LocalDateTime.class),
+        @Arg(column = "version", javaType = int.class)
+    })
     @Select("""
         SELECT id, applicant_id, title, amount, currency, status,
                submitted_at, created_at, updated_at, version
@@ -244,93 +322,130 @@ public interface ExpenseMapper {
     Expense findById(Long expenseId);
 
     /**
-     * 楽観的ロック付き汎用更新メソッド
-     *
-     * 重要ポイント:
-     * 1. ドメインオブジェクトの状態をそのまま永続化
-     * 2. SET句: ドメインのversionをそのまま使用（version++しない）
-     * 3. WHERE句: version = #{version} - 1 で楽観的ロックを実現
-     *
-     * なぜ version - 1 なのか:
-     * - ドメインメソッド（approve()等）で既に version++ されている
-     * - 例: DB上のversion=5、ドメインでversion++して6になっている
-     * - WHERE version = 6 - 1 (=5) で元のバージョンと照合
-     * - 更新成功後、DBのversionは6になる（ドメインと一致）
+     * ユーザーIDで経費リストを取得
+     */
+    @ConstructorArgs({
+        @Arg(column = "id", javaType = Long.class, id = true),
+        @Arg(column = "applicant_id", javaType = Long.class),
+        @Arg(column = "title", javaType = String.class),
+        @Arg(column = "amount", javaType = BigDecimal.class),
+        @Arg(column = "currency", javaType = String.class),
+        @Arg(column = "status", javaType = ExpenseStatus.class),
+        @Arg(column = "submitted_at", javaType = LocalDateTime.class),
+        @Arg(column = "created_at", javaType = LocalDateTime.class),
+        @Arg(column = "updated_at", javaType = LocalDateTime.class),
+        @Arg(column = "version", javaType = int.class)
+    })
+    @Select("""
+        SELECT id, applicant_id, title, amount, currency, status,
+               submitted_at, created_at, updated_at, version
+        FROM expenses
+        WHERE applicant_id = #{applicantId}
+        LIMIT 5 OFFSET 0
+        """)
+    List<Expense> findByUserId(@Param("applicantId") Long applicantId);
+
+    /**
+     * 下書きを提出状態に変更
      */
     @Update("""
         UPDATE expenses
-        SET applicant_id = #{applicantId},
-            title = #{title},
-            amount = #{amount},
-            currency = #{currency},
-            status = #{status},
-            submitted_at = #{submittedAt},
-            updated_at = #{updatedAt},
-            version = #{version}
-        WHERE id = #{id}
-            AND version = #{version} - 1
+        SET status = 'SUBMITTED',
+            submitted_at = NOW()
+        WHERE id = #{expenseId}
+            AND status = 'DRAFT'
         """)
-    int updateWithOptimisticLock(Expense expense);
+    int submitDraft(@Param("expenseId") Long expenseId);
 
-    // approve/reject専用メソッドは不要！
-    // 汎用のupdateWithOptimisticLockで全ての更新をカバー
+    /**
+     * 経費を承認（楽観的ロック付き）
+     */
+    @Update("""
+        UPDATE expenses
+        SET status = 'APPROVED',
+            updated_at = NOW(),
+            version = version + 1
+        WHERE id = #{id}
+            AND version = #{version}
+            AND status = 'SUBMITTED'
+        """)
+    int approve(@Param("id") long id, @Param("version") int version);
+
+    /**
+     * 経費を却下（楽観的ロック付き）
+     */
+    @Update("""
+        UPDATE expenses
+        SET status = 'REJECTED',
+            updated_at = NOW(),
+            version = version + 1
+        WHERE id = #{id}
+            AND version = #{version}
+            AND status = 'SUBMITTED'
+        """)
+    int reject(@Param("id") long id, @Param("version") int version);
+
+    // XMLで定義されているメソッド
+    List<Expense> search(
+        @Param("criteria") ExpenseSearchCriteriaEntity criteria,
+        @Param("orderBy") String orderBy,
+        @Param("direction") String direction,
+        @Param("size") int size,
+        @Param("offset") int offset);
+
+    long count(@Param("criteria") ExpenseSearchCriteriaEntity criteria);
+
+    List<Expense> filter(
+        @Param("criteria") ExpenseSearchCriteriaEntity criteria,
+        @Param("orderBy") String orderBy,
+        @Param("direction") String direction);
 }
 ```
 
-### 📚 SQL学習ポイント
+### 📚 アノテーション学習ポイント
 
-**WHERE version = #{version} - 1 の仕組み**
+**`@ConstructorArgs`の仕組み:**
 
+```java
+@ConstructorArgs({
+    @Arg(column = "id", javaType = Long.class, id = true),  // 主キー
+    @Arg(column = "applicant_id", javaType = Long.class),   // 通常フィールド
+    // ...
+})
+@Select("SELECT id, applicant_id, ... FROM expenses WHERE ...")
+Expense findById(Long expenseId);
 ```
-初期状態（DB）:
-  id=1, status=SUBMITTED, version=5
 
-処理フロー:
-1. findById(1) で取得
-   → expense.version = 5
-
-2. ドメインメソッド呼び出し
-   expense.approve()
-   → expense.status = APPROVED
-   → expense.version = 6 (5 + 1)
-
-3. updateWithOptimisticLock(expense) 実行
-   SQL:
-   UPDATE expenses
-   SET status = 'APPROVED',
-       version = 6           ← ドメインの値（既に+1済み）
-   WHERE id = 1
-       AND version = 6 - 1   ← つまり version = 5
-
-4. 結果:
-   - WHERE version = 5 → マッチ（更新成功）
-   - SET version = 6   → DBのversionが6に
-   - ドメインとDBが一致
-
-競合時:
-  他のユーザーが先に更新済み（version=6になっている）
-  → WHERE version = 6 - 1 (=5) → マッチせず
-  → 更新件数0 → 例外発生
-```
+- **`@Arg`**: 各コンストラクタ引数を定義
+- **`id = true`**: 主キーを示す
+- **`column`**: データベースのカラム名
+- **`javaType`**: Javaの型
+- **順番**: `@AllArgsConstructor`のフィールド宣言順と一致させる
 
 ---
 
-## 3. Service（ドメイン主導）
+## 3. Service層（ドメイン主導）
 
 ```java
 // src/main/java/com/example/expenses/service/ExpenseService.java
 package com.example.expenses.service;
 
-import com.example.expenses.domain.Expense;
-import com.example.expenses.event.*;
-import com.example.expenses.security.AuthenticationContext;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
+import java.util.List;
+import java.util.NoSuchElementException;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.NoSuchElementException;
+import com.example.expenses.domain.Expense;
+import com.example.expenses.domain.ExpenseStatus;
+import com.example.expenses.dto.request.ExpenseCreateRequest;
+import com.example.expenses.dto.response.ExpenseResponse;
+import com.example.expenses.exception.BusinessException;
+import com.example.expenses.repository.ExpenseMapper;
+import com.example.expenses.util.CurrentUser;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
@@ -338,18 +453,16 @@ import java.util.NoSuchElementException;
 public class ExpenseService {
 
     private final ExpenseMapper expenseMapper;
-    private final AuthenticationContext authContext;
-    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 経費を新規作成
      */
     @Transactional
     public ExpenseResponse create(ExpenseCreateRequest req) {
-        Long userId = authContext.getCurrentUserId();
+        Long userId = CurrentUser.actorId();
 
-        // ドメインのファクトリーメソッドで作成
-        Expense expense = Expense.create(
+        // ドメインのファクトリーメソッドで作成（バリデーション含む）
+        Expense expense = Expense.createDraft(
             userId,
             req.title(),
             req.amount(),
@@ -361,13 +474,9 @@ public class ExpenseService {
 
         log.info("経費作成: id={}, userId={}", expense.getId(), userId);
 
-        // イベント発行
-        eventPublisher.publishEvent(
-            new ExpenseCreatedEvent(expense.getId(), userId, traceId())
-        );
-
-        // ドメインオブジェクトが最新状態なのでそのまま返せる
-        return ExpenseResponse.toResponse(expense);
+        // 作成後のデータを取得して返す
+        Expense saved = expenseMapper.findById(expense.getId());
+        return ExpenseResponse.toResponse(saved);
     }
 
     /**
@@ -375,7 +484,7 @@ public class ExpenseService {
      */
     @Transactional
     public ExpenseResponse submit(Long expenseId) {
-        Long userId = authContext.getCurrentUserId();
+        Long userId = CurrentUser.actorId();
 
         // 経費を取得
         Expense expense = expenseMapper.findById(expenseId);
@@ -387,33 +496,24 @@ public class ExpenseService {
         if (!expense.canBeSubmittedBy(userId)) {
             throw new BusinessException(
                 "NOT_AUTHORIZED",
-                "この経費を提出する権限がありません"
+                "本人以外は提出できません"
             );
         }
 
-        // ドメインメソッドで完全に状態を更新
-        // 注: この時点で version++ される
-        expense.submit();
-
-        // ドメインの状態をそのまま永続化
-        int updated = expenseMapper.updateWithOptimisticLock(expense);
+        // 提出処理（SQLで実行）
+        int updated = expenseMapper.submitDraft(expenseId);
         if (updated == 0) {
-            // WHEREの条件（version）にマッチしなかった
             throw new BusinessException(
-                "CONCURRENT_MODIFICATION",
-                "他のユーザーに更新されています"
+                "INVALID_STATUS_TRANSITION",
+                "下書き以外は提出できません"
             );
         }
 
         log.info("経費提出: id={}, userId={}", expenseId, userId);
 
-        // イベント発行
-        eventPublisher.publishEvent(
-            new ExpenseSubmittedEvent(expenseId, userId, traceId())
-        );
-
-        // ドメインオブジェクトが最新なので再取得不要
-        return ExpenseResponse.toResponse(expense);
+        // 更新後のデータを取得
+        Expense saved = expenseMapper.findById(expenseId);
+        return ExpenseResponse.toResponse(saved);
     }
 
     /**
@@ -421,7 +521,7 @@ public class ExpenseService {
      */
     @Transactional
     public ExpenseResponse approve(Long expenseId, int version) {
-        Long userId = authContext.getCurrentUserId();
+        Long approverId = CurrentUser.actorId();
 
         // 経費を取得
         Expense expense = expenseMapper.findById(expenseId);
@@ -429,39 +529,36 @@ public class ExpenseService {
             throw new NoSuchElementException("経費が見つかりません: " + expenseId);
         }
 
-        // リクエスト時のバージョンと現在のバージョンを比較
+        // ドメインでビジネスルールチェック
+        if (!expense.canBeApproved()) {
+            throw new BusinessException(
+                "INVALID_STATUS_TRANSITION",
+                "提出済み以外は承認できません"
+            );
+        }
+
+        // バージョンチェック（楽観的ロック）
         if (expense.getVersion() != version) {
             throw new BusinessException(
                 "CONCURRENT_MODIFICATION",
-                "他のユーザーに更新されています（取得後に変更あり）"
+                "他のユーザーに更新されています"
             );
         }
 
-        // ドメインメソッドで完全に状態を更新
-        // 注: この時点で status=APPROVED, version++ される
-        expense.approve();
-
-        // ドメインの状態をそのまま永続化
-        int updated = expenseMapper.updateWithOptimisticLock(expense);
+        // 承認処理（SQLで実行）
+        int updated = expenseMapper.approve(expenseId, version);
         if (updated == 0) {
-            // SQL実行時に他のユーザーが更新した場合
             throw new BusinessException(
                 "CONCURRENT_MODIFICATION",
-                "他のユーザーに更新されています（更新直前に変更あり）"
+                "他のユーザーに更新されています"
             );
         }
 
-        log.info("経費承認: id={}, approverId={}", expenseId, userId);
+        log.info("経費承認: id={}, approverId={}", expenseId, approverId);
 
-        // イベント発行
-        eventPublisher.publishEvent(
-            new ExpenseApprovedEvent(
-                expenseId, userId, expense.getApplicantId(), traceId()
-            )
-        );
-
-        // ドメインオブジェクトが最新（再取得不要）
-        return ExpenseResponse.toResponse(expense);
+        // 更新後のデータを取得
+        Expense saved = expenseMapper.findById(expenseId);
+        return ExpenseResponse.toResponse(saved);
     }
 
     /**
@@ -469,12 +566,20 @@ public class ExpenseService {
      */
     @Transactional
     public ExpenseResponse reject(Long expenseId, String reason, int version) {
-        Long userId = authContext.getCurrentUserId();
+        Long rejectorId = CurrentUser.actorId();
 
         // 経費を取得
         Expense expense = expenseMapper.findById(expenseId);
         if (expense == null) {
             throw new NoSuchElementException("経費が見つかりません: " + expenseId);
+        }
+
+        // ドメインでビジネスルールチェック
+        if (!expense.canBeRejected()) {
+            throw new BusinessException(
+                "INVALID_STATUS_TRANSITION",
+                "提出済み以外は却下できません"
+            );
         }
 
         // バージョンチェック
@@ -485,12 +590,8 @@ public class ExpenseService {
             );
         }
 
-        // ドメインメソッドで完全に状態を更新
-        // 注: この時点で status=REJECTED, version++ される
-        expense.reject(reason);
-
-        // ドメインの状態をそのまま永続化
-        int updated = expenseMapper.updateWithOptimisticLock(expense);
+        // 却下処理（SQLで実行）
+        int updated = expenseMapper.reject(expenseId, version);
         if (updated == 0) {
             throw new BusinessException(
                 "CONCURRENT_MODIFICATION",
@@ -498,22 +599,11 @@ public class ExpenseService {
             );
         }
 
-        log.info("経費却下: id={}, rejectorId={}, reason={}", expenseId, userId, reason);
+        log.info("経費却下: id={}, rejectorId={}, reason={}", expenseId, rejectorId, reason);
 
-        // イベント発行
-        eventPublisher.publishEvent(
-            new ExpenseRejectedEvent(
-                expenseId, userId, expense.getApplicantId(), reason, traceId()
-            )
-        );
-
-        // ドメインオブジェクトが最新
-        return ExpenseResponse.toResponse(expense);
-    }
-
-    private String traceId() {
-        String tid = MDC.get(TraceIdFilter.TRACE_ID_KEY);
-        return tid == null ? "" : tid;
+        // 更新後のデータを取得
+        Expense saved = expenseMapper.findById(expenseId);
+        return ExpenseResponse.toResponse(saved);
     }
 }
 ```
@@ -522,76 +612,121 @@ public class ExpenseService {
 
 ## 📚 学習ポイント
 
-### 1. 真のリッチドメインモデル
+### 1. コンストラクタマッピングのメリット
+
+| メリット | 説明 |
+|---------|------|
+| **完全カプセル化** | setterが一切存在しない |
+| **イミュータビリティ** | オブジェクト生成後は変更不可 |
+| **安全性** | 不正な状態を持つオブジェクトを生成できない |
+| **明確性** | ファクトリメソッドで生成方法が明確 |
+
+### 2. ドメイン駆動設計（DDD）との相性
 
 ```java
-// ✅ 正しい: ドメインが真実の源泉
-expense.approve();         // ドメインで完全に状態を更新
-repository.update(expense); // ドメインの状態をそのまま永続化
+// ✅ 良い例: ドメインでビジネスルールをチェック
+if (!expense.canBeSubmittedBy(userId)) {
+    throw new BusinessException("本人以外は提出できません");
+}
 
-// ❌ 間違い: ドメインとSQLが分離
-expense.approve();          // ドメインで status = APPROVED にするが...
-repository.approve(id);     // SQLが SET status = 'APPROVED' を実行
-                           // → ドメインの状態変更が無意味
+// ❌ 悪い例: サービス層でビジネスロジック
+if (!expense.getApplicantId().equals(userId) ||
+    expense.getStatus() != ExpenseStatus.DRAFT) {
+    throw new BusinessException("提出できません");
+}
 ```
-
-### 2. 責務の明確化
-
-| コンポーネント | 責務 | 例 |
-|--------------|------|-----|
-| **ドメイン** | ビジネスルール + 状態管理 | `expense.approve()` → status変更 + version++ |
-| **Repository** | 永続化のみ | `updateWithOptimisticLock(expense)` → ドメインの状態をDBへ |
-| **Service** | オーケストレーション | トランザクション + イベント発行 |
 
 ### 3. 楽観的ロックの仕組み
 
 ```java
 // ステップ1: 取得
-Expense expense = repository.findById(1);
+Expense expense = expenseMapper.findById(1);
 // expense.version = 5
 
-// ステップ2: ドメインで更新
-expense.approve();
-// expense.version = 6 (5 + 1)
-// expense.status = APPROVED
+// ステップ2: バージョンチェック
+if (expense.getVersion() != requestVersion) {
+    throw new BusinessException("他のユーザーに更新されています");
+}
 
-// ステップ3: 永続化
-repository.updateWithOptimisticLock(expense);
-// SQL: UPDATE ... SET version=6 WHERE version=6-1
-//      → WHERE version=5 でマッチ
-//      → 更新成功
-
-// 競合時:
-// 他のユーザーが先に更新（DB version=6）
-// WHERE version=6-1 (=5) → マッチせず → 更新失敗
+// ステップ3: 更新（SQLでversion++）
+int updated = expenseMapper.approve(id, version);
+// SQL: UPDATE ... SET version = version + 1 WHERE version = 5
+// → 他のユーザーが先に更新していたら、WHERE条件に一致せず更新失敗
 ```
 
-### 4. メリット
+### 4. MyBatisのINSERT時の注意点
 
-| メリット | 説明 |
-|---------|------|
-| **一貫性** | ドメインの状態 = DBの状態（常に一致） |
-| **テスト容易** | ドメインだけでビジネスロジックをテスト可能 |
-| **再利用性** | ドメインロジックを別の場所でも使える |
-| **保守性** | ビジネスルールが1箇所に集約 |
-| **パフォーマンス** | 再取得不要（ドメインが最新） |
+```java
+@Insert("""
+    INSERT INTO expenses
+        (applicant_id, title, amount, currency, status)
+    VALUES
+        (#{applicantId}, #{title}, #{amount}, #{currency}, #{status})
+    """)
+@Options(useGeneratedKeys = true, keyProperty = "id")
+void insert(Expense expense);
+```
+
+**重要:**
+- `@Options(useGeneratedKeys = true)`: 自動採番されたIDを取得
+- `keyProperty = "id"`: 取得したIDをExpenseの`id`フィールドに設定
+- **問題**: `@AllArgsConstructor`でイミュータブルなので、idを後から設定できない！
+
+**解決策:**
+- MyBatisは内部的にリフレクションでフィールドに直接アクセスできる
+- setterがなくてもidを設定できる
 
 ---
 
-## まとめ
+## 🎯 まとめ
 
-### 修正前の問題
+### コンストラクタマッピング実装のポイント
 
-1. ❌ ドメインで`status`設定 → SQLが固定値使用 → 無意味
-2. ❌ ドメインで`version++` → SQLでも`version+1` → 二重加算
-3. ❌ approve/reject専用SQL → 汎用性なし
-4. ❌ 更新後に再取得 → 無駄なクエリ
+1. ✅ **Expenseクラス**: `@Getter` + `@AllArgsConstructor`でsetterなし
+2. ✅ **ファクトリメソッド**: `createDraft()`で安全にオブジェクト生成
+3. ✅ **ビジネスメソッド**: `canBeSubmitted()`などでルールをカプセル化
+4. ✅ **MyBatis XML**: `<constructor>`タグでマッピング
+5. ✅ **MyBatis アノテーション**: `@ConstructorArgs`でマッピング
+6. ✅ **Service層**: ドメインのメソッドでビジネスルールをチェック
 
-### 修正後の利点
+### 従来のsetterアプローチとの違い
 
-1. ✅ ドメインで完全に状態管理
-2. ✅ SQLは汎用的な更新のみ
-3. ✅ `WHERE version = #{version} - 1` で楽観的ロック
-4. ✅ 再取得不要（ドメインが真実）
+| 項目 | package-privateなsetter | コンストラクタマッピング |
+|------|------------------------|----------------------|
+| **カプセル化** | ⚠️ 部分的 | ✅ 完全 |
+| **イミュータビリティ** | ❌ 可変 | ✅ 不変 |
+| **MyBatis設定** | シンプル | やや複雑 |
+| **アーキテクチャ** | ドメインをrepositoryに移動が必要 | ドメイン層をそのまま維持 |
+| **安全性** | ⚠️ setterを誤って呼べる | ✅ setterが存在しない |
 
-これが**真のリッチドメインモデル**です！
+### 次のステップ
+
+現在の実装では、まだ**状態変更がドメイン内で完結していません**。
+
+次の改善案:
+1. `submit()`, `approve()`, `reject()`メソッドをExpenseクラスに追加
+2. これらのメソッドで新しいExpenseインスタンスを返す（イミュータブル）
+3. `updateWithOptimisticLock()`のような汎用更新メソッドを追加
+
+**例:**
+```java
+public Expense submit() {
+    if (!canBeSubmitted()) {
+        throw new IllegalStateException("下書き以外は提出できません");
+    }
+    return new Expense(
+        this.id,
+        this.applicantId,
+        this.title,
+        this.amount,
+        this.currency,
+        ExpenseStatus.SUBMITTED,  // ステータス変更
+        LocalDateTime.now(),      // 提出日時設定
+        this.createdAt,
+        LocalDateTime.now(),      // 更新日時
+        this.version + 1          // バージョン++
+    );
+}
+```
+
+これが**真のリッチドメインモデル + イミュータビリティ**の実装です！
