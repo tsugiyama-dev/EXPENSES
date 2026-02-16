@@ -41,17 +41,17 @@ public class ExpenseService {
 	private static final Set<String> ALLOWED_SORTS = Set.of("created_at", "updated_at", "submitted_at", "amount", "id");
 	
 	public ExpenseResponse create(ExpenseCreateRequest req) {
-		
-		Expense expense = new Expense();
-		expense.setApplicantId(CurrentUser.actorId());
-		expense.setTitle(req.title());
-		expense.setAmount(req.amount());
-		expense.setCurrency(req.currency());
-		expense.setStatus(ExpenseStatus.DRAFT);
-		
+
+		Expense expense = Expense.createDraft(
+			CurrentUser.actorId(),
+			req.title(),
+			req.amount(),
+			req.currency()
+		);
+
 		expenseMapper.insert(expense);
 		log.info("Expense{}", expense);
-		
+
 		auditLogMapper.insert(ExpenseAuditLog.create(
 				expense.getId(),
 				CurrentUser.actorId(),
