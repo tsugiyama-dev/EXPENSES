@@ -5,6 +5,7 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 
 import org.slf4j.MDC;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,9 @@ import com.example.expenses.dto.request.ExpenseSearchCriteria;
 import com.example.expenses.dto.request.ExpenseSearchCriteriaEntity;
 import com.example.expenses.dto.response.ExpenseResponse;
 import com.example.expenses.dto.response.PaginationResponse;
+import com.example.expenses.event.ExpenseApprovedEvent;
+import com.example.expenses.event.ExpenseRejectedEvent;
+import com.example.expenses.event.ExpenseSubmittedEvent;
 import com.example.expenses.exception.BusinessException;
 import com.example.expenses.notification.NotificationService;
 import com.example.expenses.repository.ExpenseAuditLogMapper;
@@ -28,45 +32,59 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor//Lombokが全フィールドのコンストラクタを自動生成
 @Slf4j
 public class ExpenseService {
 
+	//依存関係を明示的に宣言
 	private final ExpenseMapper expenseMapper;
 	private final UserMapper userMapper;
 	private final ExpenseAuditLogMapper auditLogMapper;
 	private final NotificationService notificationService;
 	private final CreateCsvService createCsvService;
+	private final AuthenticationContext authenticationContext;
+	private final ApplicationEventPublisher eventPublisher;
 	
 	private static final Set<String> ALLOWED_SORTS = Set.of("created_at", "updated_at", "submitted_at", "amount", "id");
 	
+	/**
+	 * @param req
+	 * @return 作成された経費申請の情報を含むExpenseResponseオブジェクト
+	 */
+	@Transactional
 	public ExpenseResponse create(ExpenseCreateRequest req) {
 
-		Expense expense = Expense.createDraft(
-			CurrentUser.actorId(),
-			req.title(),
-			req.amount(),
-			req.currency()
-		);
+		//認証サービスから現在のユーザーＩＤを取得
+		Long currentUserId = authenticationContext.getCurrentUserId();
+		
+		//エンティティを作成
+		Expense expense = Expense.create(
+				currentUserId,
+				req.title(),
+				req.amount(),
+				req.currency());
 
+		
+		//データベースに保存
 		expenseMapper.insert(expense);
-		log.info("Expense{}", expense);
 
+		
+        //監査ログを記録
 		auditLogMapper.insert(ExpenseAuditLog.create(
 				expense.getId(),
-				CurrentUser.actorId(),
-				traceId()));
-		Expense saved = expenseMapper.findById(expense.getId());
-		return toResponse(saved);
+				currentUserId,
+				traceId()
+		));
+		
+		return toResponse(expense);
 	}
 	
-	
+	//検索条件に基づいて経費申請のリストを取得し、ページネーションされたレスポンスを返す
 	public PaginationResponse<ExpenseResponse> search(
 			ExpenseSearchCriteria criteria,
 			int currentPage,
-			int pageSize,
-			Long actorId,
-			List<String> roles) {
+			int pageSize) {
+		Long userId = authenticationContext.getCurrentUserId();
 		
 		
 		ExpenseSearchCriteriaEntity e = new ExpenseSearchCriteriaEntity();
@@ -78,9 +96,9 @@ public class ExpenseService {
 		e.setSubmittedFrom(criteria.submittedFrom());
 		e.setSubmittedTo(criteria.submittedTo());
 		
-		//本人以外とROLE_APPROVER以外は全て見れない		
-		if(!roles.contains("ROLE_APPROVER")) {
-			e.setApplicantId(actorId);
+		//ROLE_APPROVER以外は全て見れない		
+		if(!authenticationContext.isApprover()) {
+			e.setApplicantId(userId);
 		}
 	
 		
@@ -101,12 +119,15 @@ public class ExpenseService {
 		return new PaginationResponse<>(items, currentPage, pageSize, (int)cnt, totalPage, pageList);
 	}
 	
-	//draft → submit
+	/**
+	 * 経費提出
+	 */
 	@Transactional
 	public ExpenseResponse submit(Long expenseId) {
 		
-		Long userId = CurrentUser.actorId();
-		//存在確認（404判定のため）
+		Long userId = authenticationContext.getCurrentUserId();
+		
+		//1.経費申請の取得
 		Expense current =expenseMapper.findById(expenseId);
 		if(current == null) {
 			throw new NoSuchElementException("Expense not found: " + expenseId);
@@ -115,28 +136,43 @@ public class ExpenseService {
 		if(!current.getApplicantId().equals(userId)) {
 			throw new BusinessException("NOT_OWNER", "本人以外は提出できません");
 		}
-		
+		//2.ビジネスルールチェック
+		if(current.getStatus() != ExpenseStatus.DRAFT) {
+			throw new BusinessException("INVALID_STATUS_TRANSITION", "下書き以外提出できません");
+		}
+		//3.提出処理
 		int updated = expenseMapper.submitDraft(expenseId);
 		
-		//Draftのみ更新できる（事故防止）
 		if(updated == 0) {
 			throw new BusinessException("INVALID_STATUS_TRANSITION",
 					"下書き以外提出できません");
 		}
+		//4.監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createDraft(expenseId, CurrentUser.actorId(), traceId()));
 		
-		//申請者へメール送信処理
-		notificationService.notifySubmitted(getApproverAddress(), expenseId, traceId());
+		//5.イベント発行
+		eventPublisher.publishEvent(
+				new ExpenseSubmittedEvent(
+						expenseId,
+						userId,
+						traceId()
+						));
 		
+//		notificationService.notifySubmitted(getApproverAddress(), expenseId, traceId());
 		
+		//6.結果を返す
 		Expense saved = expenseMapper.findById(expenseId);
 		return toResponse(saved);
 	}
 	
-	//submitted → approve
+	/**
+	 * 経費承認
+	 */
 	@Transactional
 	public ExpenseResponse approve(long expenseId, int version, Long actorId) {
 		
+		Long currentUserId = authenticationContext.getCurrentUserId();
+		//１．経費取得
 		Expense expense = expenseMapper.findById(expenseId);
 		
 		//存在確認
@@ -144,72 +180,97 @@ public class ExpenseService {
 			throw new BusinessException("NOT_FOUND", "経費申請が見つかりません: EXPENSEID ：" + expenseId, traceId());
 		}
 		
-		//ステータス確認
+		//２．ビジネスルールチェック
 		if(expense.getStatus() != ExpenseStatus.SUBMITTED) {
 			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は承認できません", traceId());
 		}
-		//楽観的ロック確認
+		//３．二重更新チェック
 		if(expense.getVersion()!= version) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId());
 		}
-		//承認処理
+		//４．承認処理
 		int updated = expenseMapper.approve(expenseId, version);
 		if(updated == 0) {
-//			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は承認できません", traceId());
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId());
 		}
-		//監査ログ登録
+		//５．監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createApprove(expenseId, actorId, traceId()));
 		
-		//申請者へメール通知処理
-		try {
-			notificationService.notifyApproved(getApplicantAddress(expense.getApplicantId()), expenseId, traceId());
-			
-		}catch(Exception e) {
-			log.warn("mail failed traceId={} expenseId={}", traceId(), expenseId, e);
-		}
+		//６．イベントを発行
+		//NotificationSeviceを直接呼び出すのではなく、イベントを発行して通知処理を分離
+		eventPublisher.publishEvent(
+				new ExpenseApprovedEvent(
+						expenseId,
+						currentUserId,
+						expense.getApplicantId(),
+						traceId()
+						));
 		
+		// →　イベントリスナーが自動的に反応して通知を実行
+		
+//		//申請者へメール通知処理
+//		try {
+//			notificationService.notifyApproved(getApplicantAddress(expense.getApplicantId()), expenseId, traceId());
+//			
+//		}catch(Exception e) {
+//			log.warn("mail failed traceId={} expenseId={}", traceId(), expenseId, e);
+//		}
+		//７．更新後の経費を取得して返す
 		var saved = expenseMapper.findById(expenseId);
 		return ExpenseResponse.toResponse(saved);
 		
 		
 	}
 	
-	//submitted → reject
+	/**
+	 * 経費却下
+	 */
 	@Transactional
 	public ExpenseResponse reject(long expenseId, String reason, int version, Long actorId) {
 		
 		String traceId = traceId();
-		Expense expense = expenseMapper.findById(expenseId);
-		
+		Long userId = authenticationContext.getCurrentUserId();
+		//1.経費取得
+		Expense expense = expenseMapper.findById(expenseId);	
 		//存在確認
 		if(expense == null) {
 			throw new BusinessException("NOT_FOUND", "経費申請が見つかりません: EXPENSEID ：" + expenseId, traceId);
 		}
-		//ステータス確認
+		//２．ビジネスルールチェック
 		if(expense.getStatus() != ExpenseStatus.SUBMITTED) {
 			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は却下できません", traceId);	
 		}
-		//楽観的ロック確認
+		//３．二重更新チェック
 		if(expense.getVersion() != version) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId);
 		}
-		//却下処理
+		//４．却下処理
 		int updated = expenseMapper.reject(expenseId, version);
+		
 		
 		if(updated == 0) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId);
 		}
-		//監査ログ登録
+		//５．監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createReject(expenseId, actorId, traceId, reason));
 		
+		//６．イベント発行
+		eventPublisher.publishEvent(
+				new ExpenseRejectedEvent(
+						expenseId,
+						userId,
+						traceId,
+						expense.getApplicantId(),
+						reason
+						));
 		//申請者へメール通知処理
-		try{
-			notificationService.notifyRejected(getApplicantAddress(expense.getApplicantId()), expenseId, reason, traceId);
-		}catch(Exception e) {
-			log.warn("mail failed traceId={} expenseId={}", traceId(), expenseId, e);
-		}
+//		try{
+//			notificationService.notifyRejected(getApplicantAddress(expense.getApplicantId()), expenseId, reason, traceId);
+//		}catch(Exception e) {
+//			log.warn("mail failed traceId={} expenseId={}", traceId(), expenseId, e);
+//		}
 		
+		//７．更新後の経費を取得して返す
 		var saved = expenseMapper.findById(expenseId);
 		return toResponse(saved);
 	}
