@@ -4,6 +4,8 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import com.example.expenses.event.ExpenseApprovedEvent;
+import com.example.expenses.event.ExpenseRejectedEvent;
+import com.example.expenses.event.ExpenseSubmittedEvent;
 import com.example.expenses.notification.NotificationService;
 import com.example.expenses.repository.UserMapper;
 
@@ -46,5 +48,37 @@ public class ExpenseNotificationListener {
 			log.error("承認通知メール送信失敗: expenseId={}, approverId={}, error={}", event.getExpenseId(),event.getApplicantId(), e.getMessage());
 			
 		}
+	}
+	
+	@EventListener
+	public void handleExpenseReject(ExpenseRejectedEvent event) {
+		
+		try {
+			log.info("承認イベント受信： expenseId={}, approverId={}",event.getExpenseId(), event.getApplicantId());
+			
+			String applicantEmail = userMapper.findEmailById(event.getApplicantId());
+			
+			notificationService.notifyRejected(applicantEmail, event.getExpenseId(), event.getReason(), event.getTraceId());
+		}catch(Exception e) {
+			log.error("承認通知メール送信失敗: expenseId={}, error={}", event.getExpenseId(), e.getMessage());
+		}
+		
+	}
+	
+	@EventListener
+	public void handleExpenseSubmitted(ExpenseSubmittedEvent event) {
+		
+		try {
+			log.info("提出イベント受信：expenseId={}, applicantId={}", event.getExpenseId(), event.getApplicantId());
+			
+			String approverEmail = userMapper.findAnyApproverEmail();
+			
+			notificationService.notifySubmitted(approverEmail, event.getExpenseId(), event.getTraceId());
+			
+		}catch(Exception e) {
+			log.error("提出通知メール送信失敗： expenseId={}", event.getExpenseId());
+		}
+		
+		
 	}
 }

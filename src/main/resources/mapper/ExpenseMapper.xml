@@ -7,14 +7,14 @@
   <mapper namespace="com.example.expenses.repository.ExpenseMapper">
 
   <!-- コンストラクタマッピング用のresultMap -->
-  <resultMap id="expenseResultMap" type="com.example.expenses.domain.Expense">
+  <resultMap id="expenseResultMap" type="Expense">
     <constructor>
       <idArg column="id" javaType="Long"/>
       <arg column="applicant_id" javaType="Long"/>
       <arg column="title" javaType="String"/>
-      <arg column="amount" javaType="java.math.BigDecimal"/>
+      <arg column="amount" javaType="BigDecimal"/>
       <arg column="currency" javaType="String"/>
-      <arg column="status" javaType="com.example.expenses.domain.ExpenseStatus"/>
+      <arg column="status" javaType="ExpenseStatus"/>
       <arg column="submitted_at" javaType="java.time.LocalDateTime"/>
       <arg column="created_at" javaType="java.time.LocalDateTime"/>
       <arg column="updated_at" javaType="java.time.LocalDateTime"/>
