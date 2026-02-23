@@ -3,9 +3,13 @@ package com.example.expenses.domain;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Getter
+@AllArgsConstructor
+@NoArgsConstructor
 public class Expense {
 
 	private Long id;
@@ -17,7 +21,7 @@ public class Expense {
 	private LocalDateTime submittedAt;
 	private LocalDateTime createdAt;
 	private LocalDateTime updatedAt;
-	private int version;
+	private Integer version;
 
 	/**
 	 * 経費を新規作成（ファクトリーメソッド）
@@ -101,7 +105,6 @@ public class Expense {
 	
 	/**
 	 * 経費が却下可能かどうか
-	 * @return
 	 */
 	public boolean canBeRejected() {
 		return this.status == ExpenseStatus.SUBMITTED;

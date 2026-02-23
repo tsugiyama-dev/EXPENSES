@@ -80,8 +80,7 @@ public class ExpenseViewController {
 //			return "expenses/detail";
 //		}
 		
-		PaginationResponse<ExpenseResponse> expenses = expenseService.search(criteria, page, pageSize,
-				user.getUserId(),conversionType(user.getRoles()));
+		PaginationResponse<ExpenseResponse> expenses = expenseService.search(criteria, page, pageSize);
 		
 		expenseService.reject(expenseId, request.getReason(), version, user.getUserId());
 		redirect.addAttribute("rejectRequest", new RejectRequest());
@@ -104,9 +103,7 @@ public class ExpenseViewController {
 		PaginationResponse<ExpenseResponse> expenses = expenseService.search(
 				criteria,
 				page,
-				pageSize,
-				user.getUserId(),
-				conversionType(user.getRoles()));
+				pageSize);
 
 		
 		model.addAttribute("rejectRequest", new RejectRequest());
@@ -148,8 +145,7 @@ public class ExpenseViewController {
 			{
 		
 
-		PaginationResponse<ExpenseResponse> result = expenseService.search(criteria, page, pageSize,
-				user.getUserId(),conversionType(user.getRoles()));
+		PaginationResponse<ExpenseResponse> result = expenseService.search(criteria, page, pageSize);
 		
 		model.addAttribute("actorId", user.getUserId());
 		model.addAttribute("expense", result);

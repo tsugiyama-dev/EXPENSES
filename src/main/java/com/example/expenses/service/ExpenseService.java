@@ -158,8 +158,6 @@ public class ExpenseService {
 						traceId()
 						));
 		
-//		notificationService.notifySubmitted(getApproverAddress(), expenseId, traceId());
-		
 		//6.結果を返す
 		Expense saved = expenseMapper.findById(expenseId);
 		return toResponse(saved);
@@ -208,13 +206,7 @@ public class ExpenseService {
 		
 		// →　イベントリスナーが自動的に反応して通知を実行
 		
-//		//申請者へメール通知処理
-//		try {
-//			notificationService.notifyApproved(getApplicantAddress(expense.getApplicantId()), expenseId, traceId());
-//			
-//		}catch(Exception e) {
-//			log.warn("mail failed traceId={} expenseId={}", traceId(), expenseId, e);
-//		}
+
 		//７．更新後の経費を取得して返す
 		var saved = expenseMapper.findById(expenseId);
 		return ExpenseResponse.toResponse(saved);
@@ -264,12 +256,7 @@ public class ExpenseService {
 						reason
 						));
 		//申請者へメール通知処理
-//		try{
-//			notificationService.notifyRejected(getApplicantAddress(expense.getApplicantId()), expenseId, reason, traceId);
-//		}catch(Exception e) {
-//			log.warn("mail failed traceId={} expenseId={}", traceId(), expenseId, e);
-//		}
-		
+
 		//７．更新後の経費を取得して返す
 		var saved = expenseMapper.findById(expenseId);
 		return toResponse(saved);

@@ -1,162 +1,130 @@
 package com.example.expenses.service;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.math.BigDecimal;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.example.expenses.domain.Expense;
+import com.example.expenses.dto.ExpenseAuditLog;
+import com.example.expenses.dto.request.ExpenseCreateRequest;
+import com.example.expenses.dto.request.ExpenseSearchCriteria;
+import com.example.expenses.dto.response.ExpenseResponse;
+import com.example.expenses.repository.ExpenseAuditLogMapper;
+import com.example.expenses.repository.ExpenseMapper;
 
 //@ExtendWith(MockitoExtension.class)
 //@WebMvcTest(ExpenseController.class)
-@SpringBootTest
-@AutoConfigureMockMvc
-@Transactional
+
+
+/**
+ * ExpenseServiceのユニットテスト
+ * モックを使用してデータベースなしでテスト可能
+ */
+@ExtendWith(MockitoExtension.class)
 class ExpenseServiceTest {
 
-	@Autowired
-	MockMvc mockMvc;
-//	@Mock
-//	ExpenseMapper expenseMapper;
-//	@InjectMocks
-//	ExpenseService expenseService;
-//	@Test
-//	void testSubmit() throws Exception {
-//		long expenseId = 24L;	
-//		mockMvc.perform(post("/expenses/{id}/approve", expenseId)
-//				.with(httpBasic("hikaru@example.com", "pass1234")))
-//				.andExpect(status().isForbidden());
-//	}
-//	@Test
-//	void testApprove() throws Exception{
-//		long expenseId = 19L;
-//		mockMvc.perform(
-//				post("/expenses/{id}/approve", expenseId)
-//				.with(httpBasic("approver@example.com", "1234"))
-//				).andExpect(status().isOk());
-//	}	
-//	@Test
-//	void approve_user_Is_Forbidden_withErrorCode() throws Exception {
-//		long expenseId = 36L;
-//		
-//		mockMvc.perform(post("/expenses/{id}/approve", expenseId)
-//				.with(httpBasic("hikaru@example.com", "pass1234")))
-//		
-//		.andExpect(status().isForbidden());
-////		.andExpect(jsonPath("$.error").value("Forbidden"));
-//	}
-//	@Test
-//	void isUnauthorized() throws Exception {
-//		
-//		long expenseId = 22L;
-//		
-//		mockMvc.perform(post("/expense/{id}/approve", expenseId))
-//		.andExpect(status().isUnauthorized());
-//	}
-//	@Test
-//	void is_Ok() throws Exception {
-//		
-//		long expenseId = 29L;
-//		
-//		mockMvc.perform(post("/expenses/{id}/approve", expenseId)
-//				.with(httpBasic("approver@example.com", "1234")))
-//		.andExpect(jsonPath("$.status").value("APPROVED"));
-//	}
-//	@Test
-//	void not_submitted_invalid_approved() throws Exception {
-//		
-//		long expenseId = 37L;
-//		
-//		mockMvc.perform(post("/expenses/{id}/approve", expenseId)
-//				.with(httpBasic("approver@example.com", "1234")))
-//		.andExpect(jsonPath("$.details[0].field").value(""));
-//	}
-//	
-//	@Test
-//	void success_approve() throws Exception {
-//		
-//		long expenseId = 38L;
-//		mockMvc.perform(post("/expenses/{id}/approve", expenseId).with(httpBasic("approver@example.com","1234")))
-//		.andExpect(status().isOk());
-//	}
-	@Test
-	void unAuthentcted_status_401()throws Exception {
-		
-		long expenseId = 99L;
-		
-		mockMvc.perform(post("/expenses/{id}/submit", expenseId)).
-		andExpect(status().isUnauthorized());
-	}
-	@Test
-	void check_403() throws Exception {
-		
-		long expenseId = 32L;
-		
-		mockMvc.perform(post("/expenses/{id}/submit", expenseId)
-				.with(httpBasic("hikaru@example.com", "pass1234")))
-		.andExpect(status().isConflict())
-		.andExpect(jsonPath("$.message").value("本人以外は提出できません"));
-		
+	@Mock
+	private ExpenseMapper expenseMapper;
+	@Mock
+	private ExpenseAuditLogMapper auditLogMapper;
+	@Mock
+	private AuthenticationContext authenticationContext;
 	
-	}
+	@InjectMocks
+	private ExpenseService expenseService;
 	
 	@Test
-	void check_409() throws Exception {
-		long expenseId = 32L;
+	void expenseCreate_Success() {
+		// テストコードをここに記述
+		Long expectedUserId = 123L;
+		ExpenseCreateRequest request = new ExpenseCreateRequest(
+				"出張費",
+				new BigDecimal("10000"),
+				"JPY"
+				);
+		// モックの振る舞いを定義
+		when(authenticationContext.getCurrentUserId()).thenReturn(expectedUserId);
 		
-		mockMvc.perform(post("/expenses/{id}/approve", expenseId)
-				.with(httpBasic("approver@example.com", "1234")))
-		.andExpect(status().isConflict())
-		.andExpect(jsonPath("$.message").value("提出済み以外は承認できません"));
+		// expenseMapperのinsertメソッドが呼ばれたときに、引数のExpenseオブジェクトにIDを設定するようにする
+		doAnswer(invocation -> {
+			Expense expense = invocation.getArgument(0);
+			expense = Expense.create(expectedUserId,expense.getTitle(), expense.getAmount(), expense.getCurrency()); // モックのinsertメソッドが呼ばれたときにIDを設定
+//			expense..setId(expectedUserId); // モックのinsertメソッドが呼ばれたときにIDを設定
+			return null;
+		}).when(expenseMapper).insert(any(Expense.class));
+		
+		// テスト対象のメソッドを呼び出す
+		ExpenseResponse response = expenseService.create(request);
+		
+		// 結果を検証
+		assertThat(response).isNotNull();
+		assertThat(response.applicantId()).isEqualTo(expectedUserId);
+		assertThat(response.title()).isEqualTo("出張費");
+		assertThat(response.amount()).isEqualTo(new BigDecimal("10000"));
+		
+		//methodが呼び出されたかを検証
+		verify(authenticationContext).getCurrentUserId();
+		verify(expenseMapper).insert(any(Expense.class));
+		verify(auditLogMapper).insert(any(ExpenseAuditLog.class));
+		
+		
 	}
 	
-	@Test
-	void check_400() throws Exception {
-		String json = """
-				{
-				"reason":""
-				}
-				""";
-		
-		long expenseId  = 999L;
-		
-		mockMvc.perform(post("/expenses/{id}/reject", expenseId)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(json)
-				.with(httpBasic("approver@example.com", "1234")))
-		.andExpect(status().isBadRequest())
-		.andExpect(jsonPath("$.details[0].message").value("却下理由は必須です"));
-	}
 	
 	@Test
-	void check_404() throws Exception {
-		mockMvc.perform(post("/expenses/{id}/submit", 9999)
-				.with(httpBasic("hikaru@example.com","pass1234")))
-		.andExpect(status().isNotFound())
-		.andExpect(jsonPath("$.message").value("対象データが見つかりません"));
+	void expenseSearch_other_than_approver_only_owners_expenses_get() { //other than～  ～以外
+		
+		Long userId = 123L;
+		
+		when(authenticationContext.getCurrentUserId()).thenReturn(userId);
+		when(authenticationContext.isApprover()).thenReturn(false);
+		
+		ExpenseSearchCriteria criteria = new ExpenseSearchCriteria(
+				null, null, null,null,null,null,null,null
+				);
+		// テスト対象のメソッドを呼び出す
+		expenseService.search(criteria, 1, 10);
+		
+		verify(expenseMapper).search(
+				argThat(c -> c.getApplicantId().equals(userId))
+				,anyString()
+				,anyString()
+				,anyInt()
+				,anyInt()
+		);
 
 	}
-	
 	@Test
-	void check_200_status() throws Exception {
-		long id = 29L;
+	void expenseSearch_approver_all_expenses_get() { 
 		
-		String json = """
-				{
-					"reason":"申請期限の締め切り日が過ぎているため承認/申請できません"
-				}
-				""";
-		mockMvc.perform(post("/expenses/{id}/reject", id)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(json)
-				.with(httpBasic("approver@example.com", "1234")))
-		.andExpect(status().isOk())
-		.andExpect(jsonPath("$.status").value("REJECTED"));
+		Long approverId = 456L;
+		
+		when(authenticationContext.getCurrentUserId()).thenReturn(approverId);
+		when(authenticationContext.isApprover()).thenReturn(true);
+		
+		ExpenseSearchCriteria criteria = new ExpenseSearchCriteria(
+				null ,null , null,null,null,null,null,null
+				);
+		// テスト対象のメソッドを呼び出す
+		expenseService.search(criteria, 1, 10);
+		
+		verify(expenseMapper).search(
+				//applicantIdでフィルタされていないことを検証
+				argThat(c -> c.getApplicantId() == null)
+				,anyString()
+				,anyString()
+				,anyInt()
+				,anyInt()
+				);
+		
 	}
 
 }

@@ -40,7 +40,7 @@ public interface ExpenseMapper {
 		@Arg(column = "submitted_at", javaType = LocalDateTime.class),
 		@Arg(column = "created_at", javaType = LocalDateTime.class),
 		@Arg(column = "updated_at", javaType = LocalDateTime.class),
-		@Arg(column = "version", javaType = int.class)
+		@Arg(column = "version", javaType = Integer.class)
 	})
 	@Select("""
 			SELECT id, applicant_id, title, amount, currency, status,

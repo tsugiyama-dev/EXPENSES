@@ -71,8 +71,7 @@ public class ExpenseController {
 				submittedTo);
 		var user = (LoginUser)SecurityContextHolder.getContext().getAuthentication();
 		return ResponseEntity.ok().body(
-				expenseService.search(criteria, page, size, user.getUserId(),
-				user.getRoles().stream().map(r -> r.getRole()).toList()));
+				expenseService.search(criteria, page, size));
 	}
 
 	@PostMapping("/{expenseId}/approve")
