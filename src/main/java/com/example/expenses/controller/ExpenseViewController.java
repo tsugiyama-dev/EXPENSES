@@ -6,6 +6,8 @@ import java.util.List;
 
 import jakarta.validation.Valid;
 
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -30,6 +32,7 @@ import com.example.expenses.dto.request.ExpenseSearchCriteria;
 import com.example.expenses.dto.request.RejectRequest;
 import com.example.expenses.dto.response.ExpenseResponse;
 import com.example.expenses.dto.response.PaginationResponse;
+import com.example.expenses.service.ExpenseExportService;
 import com.example.expenses.service.ExpenseService;
 
 import lombok.RequiredArgsConstructor;
@@ -42,6 +45,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ExpenseViewController {
 
 	private final ExpenseService expenseService;
+	private final ExpenseExportService expenseExportService;
 
 	
 	@ModelAttribute(name = "statuses")
@@ -75,10 +79,6 @@ public class ExpenseViewController {
 			RedirectAttributes redirect,
 			@AuthenticationPrincipal LoginUser user) {
 		
-//		if(result.hasErrors()) {
-//			model.addAttribute("rejRequest", request);
-//			return "expenses/detail";
-//		}
 		
 		PaginationResponse<ExpenseResponse> expenses = expenseService.search(criteria, page, pageSize);
 		
@@ -157,19 +157,19 @@ public class ExpenseViewController {
 	}
 	
 	@GetMapping("/csv")
-	public ResponseEntity<byte[]> csv(
+	public ResponseEntity<Resource> csv(
+			@RequestParam(defaultValue = "csv") String format,
 			@ModelAttribute ExpenseSearchCriteria criteria,
 			@AuthenticationPrincipal LoginUser user) {
+
+		Resource resource = new ByteArrayResource(expenseExportService.export(criteria, format));
 		
-		byte[] csv = expenseService.getCsv(criteria);
-		log.info("検索条件：{} ",criteria);
 		HttpHeaders header   =  new HttpHeaders();
 		
-		header.setContentType(MediaType.parseMediaType("text/csv"));
-		header.setContentDisposition(ContentDisposition.attachment().filename("Expenses.csv").build());
-		header.setContentLength(csv.length);
+		header.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+		header.setContentDisposition(ContentDisposition.attachment().filename("Expenses." + format).build());
 
-		return ResponseEntity.ok().headers(header).body(csv);
+		return ResponseEntity.ok().headers(header).body(resource);
 	}
 	
 	private String displayName(String username) {
