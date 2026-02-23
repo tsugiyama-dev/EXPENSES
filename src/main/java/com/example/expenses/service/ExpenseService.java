@@ -254,13 +254,7 @@ public class ExpenseService {
 		return toResponse(saved);
 	}
 	
-	public byte[] getCsv(ExpenseSearchCriteria criteria) {
-		
-		List<Expense> list = expenseMapper.filter(ExpenseSearchCriteria.toEntity(criteria), "created_at", "DESC");
-		return createCsvService.createCsv(list);
-	}
-	
-	
+
 	private ExpenseResponse toResponse(Expense expense) {
 		return ExpenseResponse.toResponse(expense);
 	}

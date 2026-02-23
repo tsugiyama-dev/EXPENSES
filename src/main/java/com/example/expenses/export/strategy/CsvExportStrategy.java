@@ -28,15 +28,15 @@ public class CsvExportStrategy implements ExportStrategy {
 		
 		for(Expense expense : expenses) {
 			
-			csv.append(expense.getId() + "\n");
-			csv.append(expense.getApplicantId() + "\n");
-			csv.append(quote(expense.getTitle()) + "\n");
-			csv.append(expense.getAmount() + "\n");
-			csv.append(expense.getCurrency() + "\n");
-			csv.append(expense.getStatus() + "\n");
-			csv.append(expense.getSubmittedAt() + "\n");
-			csv.append(expense.getCreatedAt() + "\n");
-			csv.append(expense.getUpdatedAt());
+			csv.append(expense.getId() + ",");
+			csv.append(expense.getApplicantId() + ",");
+			csv.append(quote(expense.getTitle()) + ",");
+			csv.append(expense.getAmount() + ",");
+			csv.append(expense.getCurrency() + ",");
+			csv.append(expense.getStatus() + ",");
+			csv.append(expense.getSubmittedAt() + ",");
+			csv.append(expense.getCreatedAt() + ",");
+			csv.append(expense.getUpdatedAt() + "\n");
 		}
 		
 		return csv.toString().getBytes(MS932);
