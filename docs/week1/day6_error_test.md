@@ -1,4 +1,4 @@
-# Day 6: エラーケースのテスト ⚠️
+# Day 6: エラーケースとモックの検証 ⚠️
 
 **学習時間:** 1.5時間
 **難易度:** ⭐⭐⭐☆☆
@@ -7,10 +7,10 @@
 
 ## 🎯 今日の目標
 
-- 例外のテスト方法を理解する
+- Mockitoで例外をスローする方法を学ぶ
 - assertThatThrownBy の使い方を覚える
-- HTTPエラーステータスの検証ができる
-- エラーメッセージの検証ができる
+- verify() で呼び出し回数を検証できる
+- エラーケースのテストを書ける
 
 ---
 
@@ -19,7 +19,7 @@
 ### シーン: エラーハンドリングがない場合
 
 ```java
-public void approve(Long expenseId) {
+public ExpenseResponse approve(Long expenseId, int version, Long actorId) {
     Expense expense = expenseMapper.findById(expenseId);
 
     // ❌ nullチェックがない！
@@ -42,11 +42,12 @@ public void approve(Long expenseId) {
 @Test
 @DisplayName("存在しない経費IDの場合はBusinessExceptionをスロー")
 void 存在しない経費IDの場合() {
-    // Given
+    // Given: 存在しないID
     long expenseId = 9999L;
+    when(expenseMapper.findById(expenseId)).thenReturn(null);
 
-    // When & Then
-    assertThatThrownBy(() -> service.approve(expenseId, 1, 999L))
+    // When & Then: 例外がスローされる
+    assertThatThrownBy(() -> expenseService.approve(expenseId, 1, 999L))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("経費申請が見つかりません");
 }
@@ -59,19 +60,56 @@ void 存在しない経費IDの場合() {
 
 ---
 
-## 🧪 例外のテスト
+## 🧪 Mockitoで例外をスローする
 
-### AssertJを使った例外のテスト
+### パターン1: when().thenThrow()
 
 ```java
-import static org.assertj.core.api.Assertions.*;
+@Test
+void データベースエラーの場合() {
+    // Given: データベースがエラーをスロー
+    when(expenseMapper.findById(anyLong()))
+        .thenThrow(new DataAccessException("DB接続エラー"));
 
+    // When & Then: 例外が伝播する
+    assertThatThrownBy(() -> expenseService.getById(1L))
+        .isInstanceOf(DataAccessException.class)
+        .hasMessageContaining("DB接続エラー");
+}
+```
+
+### パターン2: voidメソッドの場合
+
+```java
+@Test
+void 監査ログ登録エラーの場合() {
+    // Given: 監査ログ登録時にエラー
+    doThrow(new RuntimeException("ログ登録失敗"))
+        .when(auditLogMapper).insert(any(ExpenseAuditLog.class));
+
+    // When & Then: 例外が伝播する
+    ExpenseCreateRequest request = new ExpenseCreateRequest("出張費",
+                                         new BigDecimal("10000"), "JPY");
+
+    assertThatThrownBy(() -> expenseService.create(request))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("ログ登録失敗");
+}
+```
+
+---
+
+## 🔬 AssertJを使った例外のテスト
+
+### 基本形
+
+```java
 @Test
 void 例外をスローする() {
     // When & Then
     assertThatThrownBy(() -> {
         // 例外をスローするコード
-        service.approve(9999L, 1, 999L);
+        expenseService.approve(9999L, 1, 999L);
     })
     .isInstanceOf(BusinessException.class)         // 例外の型
     .hasMessage("経費申請が見つかりません")           // 完全一致
@@ -80,9 +118,7 @@ void 例外をスローする() {
 }
 ```
 
----
-
-### JUnit 5 の assertThrows
+### JUnit 5 の assertThrows も使える
 
 ```java
 @Test
@@ -90,7 +126,7 @@ void 例外をスローする() {
     // When & Then
     BusinessException ex = assertThrows(
         BusinessException.class,
-        () -> service.approve(9999L, 1, 999L)
+        () -> expenseService.approve(9999L, 1, 999L)
     );
 
     // 例外の内容を検証
@@ -101,30 +137,30 @@ void 例外をスローする() {
 
 ---
 
-## 📝 実例: approve メソッドのエラーケース
+## 📝 実例: searchメソッドのエラーケース
 
 ### テスト対象のコード
 
 ```java
-public ExpenseResponse approve(long expenseId, int version, Long actorId) {
-    Expense expense = expenseMapper.findById(expenseId);
-
-    // エラー1: 経費が存在しない
-    if(expense == null) {
-        throw new BusinessException("NOT_FOUND", "経費申請が見つかりません");
+public List<ExpenseResponse> search(ExpenseSearchCriteria criteria,
+                                   int page, int limit) {
+    // ページング検証
+    if (page < 1) {
+        throw new IllegalArgumentException("ページは1以上である必要があります");
+    }
+    if (limit < 1 || limit > 100) {
+        throw new IllegalArgumentException("limitは1-100の範囲である必要があります");
     }
 
-    // エラー2: ステータスがSUBMITTED以外
-    if(expense.getStatus() != ExpenseStatus.SUBMITTED) {
-        throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は承認できません");
+    // 権限によるフィルタリング
+    if (!authenticationContext.isApprover()) {
+        criteria = criteria.withApplicantId(
+            authenticationContext.getCurrentUserId()
+        );
     }
 
-    // エラー3: バージョンが一致しない（楽観的ロック）
-    if(expense.getVersion() != version) {
-        throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています");
-    }
-
-    // ...
+    // 検索実行
+    return expenseMapper.search(criteria, ...);
 }
 ```
 
@@ -134,272 +170,180 @@ public ExpenseResponse approve(long expenseId, int version, Long actorId) {
 
 ```java
 @Nested
-@DisplayName("異常系")
-class ErrorCase {
+@DisplayName("経費検索 (search) - 異常系")
+class SearchErrorTest {
 
     @Test
-    @DisplayName("経費が存在しない場合はBusinessExceptionをスロー")
-    void 経費が存在しない場合() {
+    @DisplayName("pageが0の場合はIllegalArgumentExceptionをスロー")
+    void pageが0の場合() {
         // Given
-        long expenseId = 9999L;
-        given(expenseMapper.findById(expenseId)).willReturn(null);
+        ExpenseSearchCriteria criteria = new ExpenseSearchCriteria(
+            null, null, null, null, null, null, null, null
+        );
 
         // When & Then
-        assertThatThrownBy(() -> service.approve(expenseId, 1, 999L))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("経費申請が見つかりません");
+        assertThatThrownBy(() -> expenseService.search(criteria, 0, 10))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("ページは1以上");
     }
 
     @Test
-    @DisplayName("ステータスがDRAFTの場合はBusinessExceptionをスロー")
-    void ステータスがDRAFTの場合() {
+    @DisplayName("limitが0の場合はIllegalArgumentExceptionをスロー")
+    void limitが0の場合() {
         // Given
-        Expense draftExpense = ExpenseTestBuilder.createDraft();
-        given(expenseMapper.findById(draftExpense.getId())).willReturn(draftExpense);
+        ExpenseSearchCriteria criteria = new ExpenseSearchCriteria(
+            null, null, null, null, null, null, null, null
+        );
 
         // When & Then
-        assertThatThrownBy(() -> service.approve(draftExpense.getId(), 1, 999L))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("提出済み以外は承認できません");
+        assertThatThrownBy(() -> expenseService.search(criteria, 1, 0))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("limitは1-100の範囲");
     }
 
     @Test
-    @DisplayName("バージョンが一致しない場合はBusinessExceptionをスロー")
-    void バージョンが一致しない場合() {
+    @DisplayName("limitが101の場合はIllegalArgumentExceptionをスロー")
+    void limitが101の場合() {
         // Given
-        Expense expense = ExpenseTestBuilder.createSubmitted();
-        given(expenseMapper.findById(expense.getId())).willReturn(expense);
+        ExpenseSearchCriteria criteria = new ExpenseSearchCriteria(
+            null, null, null, null, null, null, null, null
+        );
 
         // When & Then
-        int wrongVersion = 999;
-        assertThatThrownBy(() -> service.approve(expense.getId(), wrongVersion, 999L))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("他のユーザに更新されています");
+        assertThatThrownBy(() -> expenseService.search(criteria, 1, 101))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("limitは1-100の範囲");
     }
 }
 ```
 
 ---
 
-## 🌐 HTTPエラーのテスト
+## 🔍 verify() でモックの呼び出しを検証
 
-### 現在のExpenseServiceTest.javaのエラーケース
-
-**現在のコード:**
+### 基本形: 呼ばれたことを確認
 
 ```java
-@SpringBootTest
-@AutoConfigureMockMvc
-@Transactional
-class ExpenseServiceTest {
+@Test
+void メソッドが呼ばれたことを確認() {
+    // When
+    expenseService.create(request);
 
-    @Autowired
-    MockMvc mockMvc;
-
-    @Test
-    void unAuthentcted_status_401() throws Exception {
-        long expenseId = 99L;
-        mockMvc.perform(post("/expenses/{id}/submit", expenseId))
-            .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void check_403() throws Exception {
-        long expenseId = 32L;
-        mockMvc.perform(post("/expenses/{id}/submit", expenseId)
-                .with(httpBasic("hikaru@example.com", "pass1234")))
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.message").value("本人以外は提出できません"));
-    }
-
-    @Test
-    void check_404() throws Exception {
-        mockMvc.perform(post("/expenses/{id}/submit", 9999)
-                .with(httpBasic("hikaru@example.com","pass1234")))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.message").value("対象データが見つかりません"));
-    }
-
-    @Test
-    void check_400() throws Exception {
-        String json = """
-            {
-                "reason":""
-            }
-            """;
-        long expenseId = 999L;
-        mockMvc.perform(post("/expenses/{id}/reject", expenseId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json)
-                .with(httpBasic("approver@example.com", "1234")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.details[0].message").value("却下理由は必須です"));
-    }
+    // Then: insert()が呼ばれた
+    verify(expenseMapper).insert(any(Expense.class));
+    verify(auditLogMapper).insert(any(ExpenseAuditLog.class));
 }
 ```
 
----
-
-### 改善版: @Nested と @DisplayName を使う
+### 呼び出し回数を確認
 
 ```java
-@Nested
-@DisplayName("HTTPエラー")
-class HttpErrorTest {
+@Test
+void 呼び出し回数を確認() {
+    // When
+    expenseService.create(request);
 
-    @Test
-    @DisplayName("認証なしで経費を提出すると401エラー")
-    void 認証なしで提出すると401エラー() throws Exception {
-        // Given
-        long expenseId = 99L;
-
-        // When & Then
-        mockMvc.perform(post("/expenses/{id}/submit", expenseId))
-            .andExpect(status().isUnauthorized());  // 401
-    }
-
-    @Test
-    @DisplayName("存在しない経費を提出すると404エラー")
-    void 存在しない経費を提出すると404エラー() throws Exception {
-        // Given: 存在しないID
-        long notExistExpenseId = 9999L;
-
-        // When & Then
-        mockMvc.perform(
-            post("/expenses/{id}/submit", notExistExpenseId)
-                .with(httpBasic("hikaru@example.com", "pass1234"))
-        )
-        .andExpect(status().isNotFound())  // 404
-        .andExpect(jsonPath("$.message").value("対象データが見つかりません"));
-    }
-
-    @Test
-    @DisplayName("却下理由が空の場合は400エラー")
-    void 却下理由が空の場合は400エラー() throws Exception {
-        // Given: 空の却下理由
-        String json = """
-            {
-                "reason": ""
-            }
-            """;
-        long expenseId = 999L;
-
-        // When & Then
-        mockMvc.perform(
-            post("/expenses/{id}/reject", expenseId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json)
-                .with(httpBasic("approver@example.com", "1234"))
-        )
-        .andExpect(status().isBadRequest())  // 400
-        .andExpect(jsonPath("$.details[0].message").value("却下理由は必須です"));
-    }
-
-    @Test
-    @DisplayName("本人以外が提出すると409エラー")
-    void 本人以外が提出すると409エラー() throws Exception {
-        // Given: hikaru さんの経費
-        long expenseId = 32L;
-
-        // When: hikaru さん本人が提出（テストデータの都合で409になる）
-        mockMvc.perform(
-            post("/expenses/{id}/submit", expenseId)
-                .with(httpBasic("hikaru@example.com", "pass1234"))
-        )
-        .andExpect(status().isConflict())  // 409
-        .andExpect(jsonPath("$.message").value("本人以外は提出できません"));
-    }
-
-    @Test
-    @DisplayName("提出済み以外を承認すると409エラー")
-    void 提出済み以外を承認すると409エラー() throws Exception {
-        // Given: 下書きの経費
-        long draftExpenseId = 32L;
-
-        // When & Then
-        mockMvc.perform(
-            post("/expenses/{id}/approve", draftExpenseId)
-                .with(httpBasic("approver@example.com", "1234"))
-        )
-        .andExpect(status().isConflict())  // 409
-        .andExpect(jsonPath("$.message").value("提出済み以外は承認できません"));
-    }
+    // Then
+    verify(expenseMapper, times(1)).insert(any(Expense.class));
+    verify(expenseMapper, never()).update(any(Expense.class));
 }
 ```
 
----
+### 引数の中身を確認
 
-## 📊 よく使うHTTPステータスコード
+```java
+@Test
+void 引数の中身を確認() {
+    // When
+    Long userId = 123L;
+    when(authenticationContext.getCurrentUserId()).thenReturn(userId);
+    when(authenticationContext.isApprover()).thenReturn(false);
 
-| コード | 意味 | 例 |
-|--------|------|-----|
-| **200** | OK | 正常 |
-| **201** | Created | 作成成功 |
-| **400** | Bad Request | バリデーションエラー |
-| **401** | Unauthorized | 認証なし |
-| **403** | Forbidden | 権限なし |
-| **404** | Not Found | 存在しない |
-| **409** | Conflict | 楽観的ロック、ビジネスロジックエラー |
-| **500** | Internal Server Error | サーバーエラー |
+    expenseService.search(criteria, 1, 10);
+
+    // Then: applicantIdに正しいuserIdが設定されている
+    verify(expenseMapper).search(
+        argThat(c -> c.getApplicantId().equals(userId)),
+        anyString(),
+        anyString(),
+        anyInt(),
+        anyInt()
+    );
+}
+```
+
+### 呼ばれていないことを確認
+
+```java
+@Test
+void 承認者の場合はapplicantIdでフィルタしない() {
+    // Given: 承認者
+    when(authenticationContext.isApprover()).thenReturn(true);
+
+    // When
+    expenseService.search(criteria, 1, 10);
+
+    // Then: applicantIdでフィルタされていない
+    verify(expenseMapper).search(
+        argThat(c -> c.getApplicantId() == null),
+        anyString(),
+        anyString(),
+        anyInt(),
+        anyInt()
+    );
+}
+```
 
 ---
 
 ## 📝 演習問題
 
-### 演習1: reject メソッドのエラーケース
+### 演習1: createメソッドのエラーケース
 
 **問題:** 以下のエラーケースのテストを書いてください。
 
-1. 経費が存在しない → BusinessException
-2. ステータスがDRAFT → BusinessException
-3. バージョン不一致 → BusinessException
+1. authenticationContext.getCurrentUserId() が null を返す場合
+2. expenseMapper.insert() が例外をスローする場合
+3. auditLogMapper.insert() が例外をスローする場合
 
 <details>
-<summary>解答</summary>
+<summary>解答例</summary>
 
 ```java
 @Nested
-@DisplayName("reject メソッドの異常系")
-class RejectErrorCase {
+@DisplayName("経費作成 (create) - 異常系")
+class CreateErrorTest {
 
     @Test
-    @DisplayName("経費が存在しない場合はBusinessExceptionをスロー")
-    void 経費が存在しない場合() {
+    @DisplayName("ユーザーIDが取得できない場合はNullPointerExceptionをスロー")
+    void ユーザーIDが取得できない場合() {
         // Given
-        long expenseId = 9999L;
-        given(expenseMapper.findById(expenseId)).willReturn(null);
+        when(authenticationContext.getCurrentUserId()).thenReturn(null);
+        ExpenseCreateRequest request = new ExpenseCreateRequest(
+            "出張費", new BigDecimal("10000"), "JPY"
+        );
 
         // When & Then
-        assertThatThrownBy(() -> service.reject(expenseId, "理由", 1, 999L))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("経費申請が見つかりません");
+        assertThatThrownBy(() -> expenseService.create(request))
+            .isInstanceOf(NullPointerException.class);
     }
 
     @Test
-    @DisplayName("ステータスがDRAFTの場合はBusinessExceptionをスロー")
-    void ステータスがDRAFTの場合() {
+    @DisplayName("経費登録に失敗した場合はDataAccessExceptionをスロー")
+    void 経費登録に失敗した場合() {
         // Given
-        Expense draftExpense = ExpenseTestBuilder.createDraft();
-        given(expenseMapper.findById(draftExpense.getId())).willReturn(draftExpense);
+        when(authenticationContext.getCurrentUserId()).thenReturn(123L);
+        doThrow(new DataAccessException("DB接続エラー"))
+            .when(expenseMapper).insert(any(Expense.class));
+
+        ExpenseCreateRequest request = new ExpenseCreateRequest(
+            "出張費", new BigDecimal("10000"), "JPY"
+        );
 
         // When & Then
-        assertThatThrownBy(() -> service.reject(draftExpense.getId(), "理由", 1, 999L))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("提出済み以外は却下できません");
-    }
-
-    @Test
-    @DisplayName("バージョンが一致しない場合はBusinessExceptionをスロー")
-    void バージョンが一致しない場合() {
-        // Given
-        Expense expense = ExpenseTestBuilder.createSubmitted();
-        given(expenseMapper.findById(expense.getId())).willReturn(expense);
-
-        // When & Then
-        int wrongVersion = 999;
-        assertThatThrownBy(() -> service.reject(expense.getId(), "理由", wrongVersion, 999L))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("他のユーザに更新されています");
+        assertThatThrownBy(() -> expenseService.create(request))
+            .isInstanceOf(DataAccessException.class)
+            .hasMessageContaining("DB接続エラー");
     }
 }
 ```
@@ -412,19 +356,18 @@ class RejectErrorCase {
 
 ### できるようになったこと
 
+✅ Mockitoで例外をスローできる
 ✅ assertThatThrownBy で例外をテストできる
-✅ HTTPエラーステータスを検証できる
-✅ エラーメッセージを検証できる
-✅ エラーケースの重要性を理解した
+✅ verify() でモックの呼び出しを検証できる
+✅ エラーケースのテストを書ける
 
 ---
 
-### エラーテストのチェックリスト
+### テストのチェックリスト
 
 - [ ] nullチェックのテストを書いたか？
 - [ ] バリデーションエラーのテストを書いたか？
-- [ ] 権限エラーのテストを書いたか？
-- [ ] ビジネスロジックエラーのテストを書いたか？
+- [ ] モックが正しく呼ばれたか verify() で確認したか？
 - [ ] エラーメッセージを検証しているか？
 
 ---

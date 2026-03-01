@@ -8,7 +8,7 @@
 ## 🎯 今日の目標
 
 - 1週間の総復習
-- 総合演習問題に挑戦
+- Mockitoユニットテストの総合演習
 - 既存のテストコードを改善
 - 自分でテストを書けるようになる
 
@@ -34,30 +34,100 @@
 - 文字列、数値、コレクションの検証
 - エラーメッセージの読み方
 
-### Day 4: HTTPリクエストのテスト
+### Day 4: Mockitoの基礎
 
-- MockMvcの使い方
-- httpBasic（認証）
-- jsonPath（JSONレスポンスの検証）
+- @Mock, @InjectMocks
+- when().thenReturn() でモックの振る舞いを定義
+- verify() でメソッド呼び出しを検証
 
 ### Day 5: テストの整理とリファクタリング
 
 - @Nested でグループ化
 - @DisplayName で日本語のテスト名
-- @BeforeEach でテストデータを準備
 - Given-When-Thenパターン
 
 ### Day 6: エラーケースのテスト
 
 - assertThatThrownBy で例外をテスト
-- HTTPエラーステータスの検証
-- エラーメッセージの検証
+- when().thenThrow() で例外をスロー
+- verify() で呼び出し回数を検証
 
 ---
 
 ## 📝 総合演習問題
 
-### 演習1: 経費承認APIの完全なテストを書く
+### 演習1: submit メソッドの完全なテストを書く
+
+**要件:**
+- @Nested でグループ化
+- @DisplayName で日本語のテスト名
+- Given-When-Thenパターン
+- 正常系、異常系をすべてテスト
+
+**テストケース:**
+
+1. **正常系**
+   - 下書き状態の経費を提出できる
+
+2. **異常系**
+   - 経費が存在しない場合はBusinessExceptionをスロー
+   - 経費の所有者でない場合はBusinessExceptionをスロー
+   - すでに提出済みの場合はBusinessExceptionをスロー
+   - バージョンが一致しない場合はBusinessExceptionをスロー
+
+<details>
+<summary>ヒント</summary>
+
+```java
+@Nested
+@DisplayName("経費提出 (submit)")
+class SubmitTest {
+
+    @Test
+    @DisplayName("正常系: 下書き状態の経費を提出できる")
+    void 下書き状態の経費を提出できる() {
+        // Given: 下書きの経費
+        Long expenseId = 1L;
+        Long userId = 123L;
+        Expense expense = Expense.create(userId, "出張費",
+                             new BigDecimal("10000"), "JPY");
+
+        when(authenticationContext.getCurrentUserId()).thenReturn(userId);
+        when(expenseMapper.findById(expenseId)).thenReturn(expense);
+
+        // When: 提出
+        ExpenseResponse response = expenseService.submit(expenseId, 1);
+
+        // Then: ステータスがSUBMITTEDになる
+        assertThat(response.status()).isEqualTo(ExpenseStatus.SUBMITTED);
+
+        // Then: 必要なメソッドが呼ばれた
+        verify(expenseMapper).update(any(Expense.class));
+        verify(auditLogMapper).insert(any(ExpenseAuditLog.class));
+    }
+
+    @Test
+    @DisplayName("異常系: 経費が存在しない場合はBusinessExceptionをスロー")
+    void 経費が存在しない場合() {
+        // Given: 存在しないID
+        Long expenseId = 9999L;
+        when(expenseMapper.findById(expenseId)).thenReturn(null);
+
+        // When & Then
+        assertThatThrownBy(() -> expenseService.submit(expenseId, 1))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("経費申請が見つかりません");
+    }
+
+    // 他のテストケースを実装...
+}
+```
+
+</details>
+
+---
+
+### 演習2: approve メソッドの完全なテストを書く
 
 **要件:**
 - @Nested でグループ化
@@ -70,232 +140,172 @@
 1. **正常系**
    - 提出済みの経費を承認できる
 
-2. **異常系 - 認証**
-   - 認証なしで承認すると401エラー
-   - 一般ユーザーが承認すると403エラー
+2. **異常系 - データ**
+   - 経費が存在しない場合はBusinessExceptionをスロー
 
-3. **異常系 - データ**
-   - 存在しない経費を承認すると404エラー
+3. **異常系 - ビジネスロジック**
+   - 下書きの経費を承認すると BusinessExceptionをスロー
+   - 既に承認済みの経費を承認すると BusinessExceptionをスロー
+   - 却下済みの経費を承認すると BusinessExceptionをスロー
 
-4. **異常系 - ビジネスロジック**
-   - 下書きの経費を承認すると409エラー
-   - 既に承認済みの経費を承認すると409エラー
-   - 却下済みの経費を承認すると409エラー
-
-5. **異常系 - 楽観的ロック**
-   - バージョンが一致しない場合は409エラー
+4. **異常系 - 楽観的ロック**
+   - バージョンが一致しない場合は BusinessExceptionをスロー
 
 <details>
-<summary>ヒント</summary>
+<summary>解答の構造</summary>
 
 ```java
-@SpringBootTest
-@AutoConfigureMockMvc
-@Transactional
-@DisplayName("経費承認API")
-class ExpenseApproveApiTest {
-
-    @Autowired
-    MockMvc mockMvc;
+@Nested
+@DisplayName("経費承認 (approve)")
+class ApproveTest {
 
     @Nested
     @DisplayName("正常系")
     class SuccessCase {
-        // ここに実装
-    }
-
-    @Nested
-    @DisplayName("異常系 - 認証")
-    class AuthenticationError {
-        // ここに実装
+        @Test
+        @DisplayName("提出済みの経費を承認できる")
+        void 提出済みの経費を承認できる() {
+            // ここに実装
+        }
     }
 
     @Nested
     @DisplayName("異常系 - データ")
     class DataError {
-        // ここに実装
+        @Test
+        @DisplayName("経費が存在しない場合はBusinessExceptionをスロー")
+        void 経費が存在しない場合() {
+            // ここに実装
+        }
     }
 
     @Nested
     @DisplayName("異常系 - ビジネスロジック")
     class BusinessLogicError {
-        // ここに実装
+        @Test
+        @DisplayName("下書きの経費を承認するとBusinessExceptionをスロー")
+        void 下書きの経費を承認する() {
+            // ここに実装
+        }
+
+        @Test
+        @DisplayName("既に承認済みの経費を承認するとBusinessExceptionをスロー")
+        void 既に承認済みの経費を承認する() {
+            // ここに実装
+        }
     }
 
     @Nested
     @DisplayName("異常系 - 楽観的ロック")
     class OptimisticLockError {
-        // ここに実装
+        @Test
+        @DisplayName("バージョンが一致しない場合はBusinessExceptionをスロー")
+        void バージョンが一致しない場合() {
+            // ここに実装
+        }
     }
 }
 ```
 
 </details>
 
-<details>
-<summary>解答</summary>
-
-`solutions/Day7Exercise1.java` を参照
-
-</details>
-
 ---
 
-### 演習2: 既存のテストコードをリファクタリング
+### 演習3: reject メソッドの完全なテストを書く
 
-**Before:**
-
-```java
-@SpringBootTest
-@AutoConfigureMockMvc
-@Transactional
-class ExpenseServiceTest {
-
-    @Autowired
-    MockMvc mockMvc;
-
-    @Test
-    void unAuthentcted_status_401() throws Exception {
-        long expenseId = 99L;
-        mockMvc.perform(post("/expenses/{id}/submit", expenseId))
-            .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void check_403() throws Exception {
-        long expenseId = 32L;
-        mockMvc.perform(post("/expenses/{id}/submit", expenseId)
-                .with(httpBasic("hikaru@example.com", "pass1234")))
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.message").value("本人以外は提出できません"));
-    }
-
-    @Test
-    void check_409() throws Exception {
-        long expenseId = 32L;
-        mockMvc.perform(post("/expenses/{id}/approve", expenseId)
-                .with(httpBasic("approver@example.com", "1234")))
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.message").value("提出済み以外は承認できません"));
-    }
-
-    @Test
-    void check_400() throws Exception {
-        String json = """
-            {
-                "reason":""
-            }
-            """;
-        long expenseId = 999L;
-        mockMvc.perform(post("/expenses/{id}/reject", expenseId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json)
-                .with(httpBasic("approver@example.com", "1234")))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.details[0].message").value("却下理由は必須です"));
-    }
-
-    @Test
-    void check_404() throws Exception {
-        mockMvc.perform(post("/expenses/{id}/submit", 9999)
-                .with(httpBasic("hikaru@example.com","pass1234")))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.message").value("対象データが見つかりません"));
-    }
-
-    @Test
-    void check_200_status() throws Exception {
-        long id = 29L;
-        String json = """
-            {
-                "reason":"申請期限の締め切り日が過ぎているため承認/申請できません"
-            }
-            """;
-        mockMvc.perform(post("/expenses/{id}/reject", id)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json)
-                .with(httpBasic("approver@example.com", "1234")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.status").value("REJECTED"));
-    }
-}
-```
-
-**要件:**
-- @Nested でグループ化
-- @DisplayName で日本語のテスト名
-- @BeforeEach でテストデータを準備
-- Given-When-Thenパターン
-- マジックナンバーを変数に
-
-<details>
-<summary>解答</summary>
-
-`solutions/Day7Exercise2.java` を参照
-
-</details>
-
----
-
-### 演習3: normalizedOrderBy と normalizedDirection のテストを完成させる
-
-**要件:**
-- すべてのパターンをテスト
-- パラメータ化テスト（@ParameterizedTest）を使う
-- @Nested でグループ化
+**問題:** rejectメソッドのユニットテストを完成させてください。
 
 **テストケース:**
 
-1. **normalizedOrderBy**
-   - null → "created_at"
-   - 空文字 → "created_at"
-   - 許可された値 → そのまま
-   - 不正な値 → "created_at"
-   - カンマ区切り → 最初の値を使う
+1. **正常系**
+   - 提出済みの経費を却下できる
 
-2. **normalizedDirection**
-   - null → "DESC"
-   - 空文字 → "DESC"
-   - "asc" → "ASC"
-   - "desc" → "DESC"
-   - 不正な値 → "DESC"
+2. **異常系**
+   - 経費が存在しない場合はBusinessExceptionをスロー
+   - 下書きの経費を却下するとBusinessExceptionをスロー
+   - バージョンが一致しない場合はBusinessExceptionをスロー
+   - 却下理由がnullの場合はIllegalArgumentExceptionをスロー
+   - 却下理由が空文字の場合はIllegalArgumentExceptionをスロー
 
-<details>
-<summary>解答</summary>
+---
 
-`solutions/Day7Exercise3.java` を参照
+### 演習4: 既存のテストをリファクタリング
 
-</details>
+**Before（現在のコード）:**
+
+```java
+@ExtendWith(MockitoExtension.class)
+class ExpenseServiceTest {
+
+    @Mock
+    private ExpenseMapper expenseMapper;
+    @Mock
+    private ExpenseAuditLogMapper auditLogMapper;
+    @Mock
+    private AuthenticationContext authenticationContext;
+
+    @InjectMocks
+    private ExpenseService expenseService;
+
+    @Test
+    void expenseCreate_Success() {
+        // 長いテストコード...
+    }
+
+    @Test
+    void expenseSearch_other_than_approver_only_owners_expenses_get() {
+        // ...
+    }
+
+    @Test
+    void expenseSearch_approver_all_expenses_get() {
+        // ...
+    }
+}
+```
+
+**課題:**
+
+以下の改善を行ってください：
+
+1. @Nested でメソッドごとにグループ化
+2. @DisplayName で日本語の説明を追加
+3. Given-When-Thenコメントを明確に追加
+4. テストメソッド名を日本語に変更
+5. 各テストケースに不足しているエラーケースを追加
 
 ---
 
 ## 🎓 理解度チェック（最終テスト）
 
-### Q1: テストピラミッドの割合は？
-
-<details>
-<summary>答えを見る</summary>
-
-- 単体テスト: 70%
-- 統合テスト: 20%
-- E2Eテスト: 10%
-
-</details>
-
----
-
-### Q2: MockMvcでPOSTリクエストを送る方法は？
+### Q1: Mockitoで依存オブジェクトをモックにするアノテーションは？
 
 <details>
 <summary>答えを見る</summary>
 
 ```java
-mockMvc.perform(
-    post("/path")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(json)
-        .with(httpBasic("email", "password"))
-)
+@Mock
+private ExpenseMapper expenseMapper;
+
+@InjectMocks
+private ExpenseService expenseService;
+```
+
+</details>
+
+---
+
+### Q2: モックの振る舞いを定義する方法は？
+
+<details>
+<summary>答えを見る</summary>
+
+```java
+when(authenticationContext.getCurrentUserId()).thenReturn(123L);
+
+// または例外をスロー
+when(expenseMapper.findById(anyLong()))
+    .thenThrow(new BusinessException("エラー"));
 ```
 
 </details>
@@ -308,24 +318,38 @@ mockMvc.perform(
 <summary>答えを見る</summary>
 
 ```java
-assertThatThrownBy(() -> service.method())
+assertThatThrownBy(() -> expenseService.submit(9999L, 1))
     .isInstanceOf(BusinessException.class)
-    .hasMessageContaining("エラーメッセージ");
+    .hasMessageContaining("経費申請が見つかりません");
 ```
 
 </details>
 
 ---
 
-### Q4: JSONレスポンスを検証する方法は？
+### Q4: モックのメソッド呼び出しを検証する方法は？
 
 <details>
 <summary>答えを見る</summary>
 
 ```java
-.andExpect(jsonPath("$.id").value(1))
-.andExpect(jsonPath("$.title").value("タクシー代"))
-.andExpect(jsonPath("$.amount").exists())
+// 呼ばれたことを確認
+verify(expenseMapper).insert(any(Expense.class));
+
+// 呼び出し回数を確認
+verify(expenseMapper, times(1)).insert(any(Expense.class));
+
+// 呼ばれていないことを確認
+verify(expenseMapper, never()).delete(anyLong());
+
+// 引数の中身を確認
+verify(expenseMapper).search(
+    argThat(c -> c.getApplicantId().equals(123L)),
+    anyString(),
+    anyString(),
+    anyInt(),
+    anyInt()
+);
 ```
 
 </details>
@@ -339,9 +363,15 @@ assertThatThrownBy(() -> service.method())
 
 ```java
 @Nested
-@DisplayName("経費提出API")
-class SubmitTest {
-    // テスト
+@DisplayName("経費作成 (create)")
+class CreateTest {
+    // 作成関連のテスト
+}
+
+@Nested
+@DisplayName("経費検索 (search)")
+class SearchTest {
+    // 検索関連のテスト
 }
 ```
 
@@ -356,9 +386,10 @@ class SubmitTest {
 ✅ テストの重要性を理解した
 ✅ JUnit 5で基本的なテストを書ける
 ✅ AssertJで検証を書ける
-✅ MockMvcでAPIのテストを書ける
+✅ Mockitoでモックを使ったユニットテストを書ける
 ✅ @Nested, @DisplayNameで読みやすいテストを書ける
 ✅ 異常系のテストを書ける
+✅ verify()でモックの呼び出しを検証できる
 ✅ Given-When-Thenパターンでテストを構造化できる
 
 ---
@@ -367,23 +398,24 @@ class SubmitTest {
 
 #### 2週目で学ぶこと
 
-- モックを使った単体テスト（@Mock, @InjectMocks）
 - テストデータビルダーパターン
 - パラメータ化テスト（@ParameterizedTest）
-- トランザクションのテスト
 - カバレッジの測定
+- リファクタリングとテスト
+- 統合テスト（MockMvc, @SpringBootTest）
 
 ---
 
 ### 実践
 
 1. **既存のテストコードを改善**
-   - `ExpenseServiceTest.java`
-   - `ExpenseAuditLogServiceTest.java`
+   - `ExpenseServiceTest.java`をリファクタリング
+   - 不足しているテストケースを追加
 
 2. **新しいテストを書く**
-   - `submit()` メソッドの単体テスト
-   - `reject()` メソッドの単体テスト
+   - `submit()` メソッドの完全なテスト
+   - `approve()` メソッドの完全なテスト
+   - `reject()` メソッドの完全なテスト
 
 3. **テストを実行**
    ```bash
@@ -412,7 +444,7 @@ class SubmitTest {
 
 わからないことがあれば：
 1. その日の資料を見直す
-2. 解答例を見る
+2. 解答例を見る（solutionsディレクトリ）
 3. Googleで検索
 4. 先輩エンジニアに聞く
 
