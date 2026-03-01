@@ -244,10 +244,23 @@ void テスト() {
 
 ### Before（現在のコード）
 
+**現在のExpenseServiceTest.javaの状態:**
+
 ```java
+@SpringBootTest
+@AutoConfigureMockMvc
+@Transactional
 class ExpenseServiceTest {
+
     @Autowired
     MockMvc mockMvc;
+
+    @Test
+    void unAuthentcted_status_401() throws Exception {
+        long expenseId = 99L;
+        mockMvc.perform(post("/expenses/{id}/submit", expenseId))
+            .andExpect(status().isUnauthorized());
+    }
 
     @Test
     void check_403() throws Exception {
@@ -268,14 +281,53 @@ class ExpenseServiceTest {
     }
 
     @Test
+    void check_400() throws Exception {
+        String json = """
+            {
+                "reason":""
+            }
+            """;
+        long expenseId = 999L;
+        mockMvc.perform(post("/expenses/{id}/reject", expenseId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json)
+                .with(httpBasic("approver@example.com", "1234")))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.details[0].message").value("却下理由は必須です"));
+    }
+
+    @Test
     void check_404() throws Exception {
         mockMvc.perform(post("/expenses/{id}/submit", 9999)
                 .with(httpBasic("hikaru@example.com","pass1234")))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("対象データが見つかりません"));
     }
+
+    @Test
+    void check_200_status() throws Exception {
+        long id = 29L;
+        String json = """
+            {
+                "reason":"申請期限の締め切り日が過ぎているため承認/申請できません"
+            }
+            """;
+        mockMvc.perform(post("/expenses/{id}/reject", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json)
+                .with(httpBasic("approver@example.com", "1234")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("REJECTED"));
+    }
 }
 ```
+
+**問題点:**
+- テスト名が意味不明（check_403, check_409, unAuthentcted_status_401）
+- マジックナンバーだらけ（32L, 99L, 999L, 29L）
+- グループ化されていない
+- Given-When-Thenパターンがない
+- コメントアウトされたコードが大量（上記には省略）
 
 ### After（リファクタリング後）
 
@@ -298,11 +350,28 @@ class ExpenseServiceTest {
 
         private long draftExpenseId;
         private long notExistExpenseId;
+        private long anyExpenseId;
 
         @BeforeEach
         void setUp() {
-            draftExpenseId = 32L;       // 下書き
+            draftExpenseId = 32L;       // hikaru さんの下書き
             notExistExpenseId = 9999L;  // 存在しないID
+            anyExpenseId = 99L;         // 任意のID
+        }
+
+        @Test
+        @DisplayName("認証なしで提出すると401エラー")
+        void 認証なしで提出すると401エラー() throws Exception {
+            // Given: 任意の経費ID
+            long expenseId = anyExpenseId;
+
+            // When: 認証なしで提出
+            var result = mockMvc.perform(
+                post("/expenses/{id}/submit", expenseId)
+            );
+
+            // Then: 401エラー
+            result.andExpect(status().isUnauthorized());
         }
 
         @Test
@@ -311,10 +380,10 @@ class ExpenseServiceTest {
             // Given: hikaru さんの経費
             long expenseId = draftExpenseId;
 
-            // When: yasuko さんが提出
+            // When: hikaru さん本人が提出しようとする（テストデータの都合で409になる）
             var result = mockMvc.perform(
                 post("/expenses/{id}/submit", expenseId)
-                    .with(httpBasic("yasuko@example.com", "pass1234"))
+                    .with(httpBasic("hikaru@example.com", "pass1234"))
             );
 
             // Then: 409エラー
@@ -366,6 +435,68 @@ class ExpenseServiceTest {
             // Then: 409エラー
             result.andExpect(status().isConflict())
                   .andExpect(jsonPath("$.message").value("提出済み以外は承認できません"));
+        }
+    }
+
+    @Nested
+    @DisplayName("経費却下API")
+    class RejectTest {
+
+        private long submittedExpenseId;
+        private long invalidExpenseId;
+
+        @BeforeEach
+        void setUp() {
+            submittedExpenseId = 29L;  // 提出済み
+            invalidExpenseId = 999L;   // 存在しないor不正なID
+        }
+
+        @Test
+        @DisplayName("却下理由が空の場合は400エラー")
+        void 却下理由が空の場合は400エラー() throws Exception {
+            // Given: 空の却下理由
+            String json = """
+                {
+                    "reason": ""
+                }
+                """;
+            long expenseId = invalidExpenseId;
+
+            // When: 却下
+            var result = mockMvc.perform(
+                post("/expenses/{id}/reject", expenseId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json)
+                    .with(httpBasic("approver@example.com", "1234"))
+            );
+
+            // Then: 400エラー
+            result.andExpect(status().isBadRequest())
+                  .andExpect(jsonPath("$.details[0].message").value("却下理由は必須です"));
+        }
+
+        @Test
+        @DisplayName("提出済みの経費を却下できる")
+        void 提出済みの経費を却下できる() throws Exception {
+            // Given: 提出済みの経費と却下理由
+            long expenseId = submittedExpenseId;
+            String json = """
+                {
+                    "reason": "申請期限の締め切り日が過ぎているため承認/申請できません"
+                }
+                """;
+
+            // When: 承認者が却下
+            var result = mockMvc.perform(
+                post("/expenses/{id}/reject", expenseId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json)
+                    .with(httpBasic("approver@example.com", "1234"))
+            );
+
+            // Then: 成功
+            result.andExpect(status().isOk())
+                  .andExpect(jsonPath("$.status").value("REJECTED"));
         }
     }
 }
