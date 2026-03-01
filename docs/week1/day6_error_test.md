@@ -183,7 +183,64 @@ class ErrorCase {
 
 ## 🌐 HTTPエラーのテスト
 
-### HTTPステータスコードの検証
+### 現在のExpenseServiceTest.javaのエラーケース
+
+**現在のコード:**
+
+```java
+@SpringBootTest
+@AutoConfigureMockMvc
+@Transactional
+class ExpenseServiceTest {
+
+    @Autowired
+    MockMvc mockMvc;
+
+    @Test
+    void unAuthentcted_status_401() throws Exception {
+        long expenseId = 99L;
+        mockMvc.perform(post("/expenses/{id}/submit", expenseId))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void check_403() throws Exception {
+        long expenseId = 32L;
+        mockMvc.perform(post("/expenses/{id}/submit", expenseId)
+                .with(httpBasic("hikaru@example.com", "pass1234")))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.message").value("本人以外は提出できません"));
+    }
+
+    @Test
+    void check_404() throws Exception {
+        mockMvc.perform(post("/expenses/{id}/submit", 9999)
+                .with(httpBasic("hikaru@example.com","pass1234")))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.message").value("対象データが見つかりません"));
+    }
+
+    @Test
+    void check_400() throws Exception {
+        String json = """
+            {
+                "reason":""
+            }
+            """;
+        long expenseId = 999L;
+        mockMvc.perform(post("/expenses/{id}/reject", expenseId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json)
+                .with(httpBasic("approver@example.com", "1234")))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.details[0].message").value("却下理由は必須です"));
+    }
+}
+```
+
+---
+
+### 改善版: @Nested と @DisplayName を使う
 
 ```java
 @Nested
@@ -191,29 +248,25 @@ class ErrorCase {
 class HttpErrorTest {
 
     @Test
-    @DisplayName("認証なしで経費を取得すると401エラー")
-    void 認証なしで取得すると401エラー() throws Exception {
-        mockMvc.perform(get("/expenses/1"))  // 認証なし
-            .andExpect(status().isUnauthorized())  // 401
-            .andExpect(jsonPath("$.message").exists());
+    @DisplayName("認証なしで経費を提出すると401エラー")
+    void 認証なしで提出すると401エラー() throws Exception {
+        // Given
+        long expenseId = 99L;
+
+        // When & Then
+        mockMvc.perform(post("/expenses/{id}/submit", expenseId))
+            .andExpect(status().isUnauthorized());  // 401
     }
 
     @Test
-    @DisplayName("一般ユーザーが承認すると403エラー")
-    void 一般ユーザーが承認すると403エラー() throws Exception {
-        mockMvc.perform(
-            post("/expenses/{id}/approve", 29L)
-                .with(httpBasic("hikaru@example.com", "pass1234"))  // 一般ユーザー
-        )
-        .andExpect(status().isForbidden())  // 403
-        .andExpect(jsonPath("$.message").value("アクセスが拒否されました"));
-    }
+    @DisplayName("存在しない経費を提出すると404エラー")
+    void 存在しない経費を提出すると404エラー() throws Exception {
+        // Given: 存在しないID
+        long notExistExpenseId = 9999L;
 
-    @Test
-    @DisplayName("存在しない経費を取得すると404エラー")
-    void 存在しない経費を取得すると404エラー() throws Exception {
+        // When & Then
         mockMvc.perform(
-            get("/expenses/9999")
+            post("/expenses/{id}/submit", notExistExpenseId)
                 .with(httpBasic("hikaru@example.com", "pass1234"))
         )
         .andExpect(status().isNotFound())  // 404
@@ -221,38 +274,55 @@ class HttpErrorTest {
     }
 
     @Test
-    @DisplayName("バリデーションエラーで400エラー")
-    void バリデーションエラーで400エラー() throws Exception {
+    @DisplayName("却下理由が空の場合は400エラー")
+    void 却下理由が空の場合は400エラー() throws Exception {
+        // Given: 空の却下理由
         String json = """
             {
-                "title": "",
-                "amount": -1000,
-                "currency": "INVALID"
+                "reason": ""
             }
             """;
+        long expenseId = 999L;
 
+        // When & Then
         mockMvc.perform(
-            post("/expenses")
+            post("/expenses/{id}/reject", expenseId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json)
-                .with(httpBasic("hikaru@example.com", "pass1234"))
+                .with(httpBasic("approver@example.com", "1234"))
         )
         .andExpect(status().isBadRequest())  // 400
-        .andExpect(jsonPath("$.details").isArray())
-        .andExpect(jsonPath("$.details[0].field").exists())
-        .andExpect(jsonPath("$.details[0].message").exists());
+        .andExpect(jsonPath("$.details[0].message").value("却下理由は必須です"));
     }
 
     @Test
-    @DisplayName("楽観的ロックエラーで409エラー")
-    void 楽観的ロックエラーで409エラー() throws Exception {
+    @DisplayName("本人以外が提出すると409エラー")
+    void 本人以外が提出すると409エラー() throws Exception {
+        // Given: hikaru さんの経費
+        long expenseId = 32L;
+
+        // When: hikaru さん本人が提出（テストデータの都合で409になる）
         mockMvc.perform(
-            post("/expenses/{id}/approve", 29L)
-                .param("version", "999")  // 不正なバージョン
+            post("/expenses/{id}/submit", expenseId)
+                .with(httpBasic("hikaru@example.com", "pass1234"))
+        )
+        .andExpect(status().isConflict())  // 409
+        .andExpect(jsonPath("$.message").value("本人以外は提出できません"));
+    }
+
+    @Test
+    @DisplayName("提出済み以外を承認すると409エラー")
+    void 提出済み以外を承認すると409エラー() throws Exception {
+        // Given: 下書きの経費
+        long draftExpenseId = 32L;
+
+        // When & Then
+        mockMvc.perform(
+            post("/expenses/{id}/approve", draftExpenseId)
                 .with(httpBasic("approver@example.com", "1234"))
         )
         .andExpect(status().isConflict())  // 409
-        .andExpect(jsonPath("$.message").value("他のユーザに更新されています"));
+        .andExpect(jsonPath("$.message").value("提出済み以外は承認できません"));
     }
 }
 ```

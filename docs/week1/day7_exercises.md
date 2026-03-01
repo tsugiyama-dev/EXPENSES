@@ -146,7 +146,11 @@ class ExpenseApproveApiTest {
 **Before:**
 
 ```java
+@SpringBootTest
+@AutoConfigureMockMvc
+@Transactional
 class ExpenseServiceTest {
+
     @Autowired
     MockMvc mockMvc;
 
@@ -176,11 +180,43 @@ class ExpenseServiceTest {
     }
 
     @Test
+    void check_400() throws Exception {
+        String json = """
+            {
+                "reason":""
+            }
+            """;
+        long expenseId = 999L;
+        mockMvc.perform(post("/expenses/{id}/reject", expenseId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json)
+                .with(httpBasic("approver@example.com", "1234")))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.details[0].message").value("却下理由は必須です"));
+    }
+
+    @Test
     void check_404() throws Exception {
         mockMvc.perform(post("/expenses/{id}/submit", 9999)
                 .with(httpBasic("hikaru@example.com","pass1234")))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("対象データが見つかりません"));
+    }
+
+    @Test
+    void check_200_status() throws Exception {
+        long id = 29L;
+        String json = """
+            {
+                "reason":"申請期限の締め切り日が過ぎているため承認/申請できません"
+            }
+            """;
+        mockMvc.perform(post("/expenses/{id}/reject", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json)
+                .with(httpBasic("approver@example.com", "1234")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("REJECTED"));
     }
 }
 ```
