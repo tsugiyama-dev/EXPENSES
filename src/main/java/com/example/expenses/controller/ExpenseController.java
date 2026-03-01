@@ -1,5 +1,6 @@
 package com.example.expenses.controller;
 
+
 import java.math.BigDecimal;
 import java.net.URI;
 import java.time.LocalDate;
@@ -25,7 +26,9 @@ import com.example.expenses.dto.response.PaginationResponse;
 import com.example.expenses.service.ExpenseService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @RestController
 @RequestMapping("/expenses")
 @RequiredArgsConstructor
@@ -57,7 +60,7 @@ public class ExpenseController {
 			@RequestParam(required = false)LocalDate submittedFrom,
 			@RequestParam(required = false)LocalDate submittedTo,
 			@RequestParam(required = false)String sort,
-			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "1") int page,
 			@RequestParam(defaultValue = "5") int size) {
 
 		ExpenseSearchCriteria criteria = new ExpenseSearchCriteria(
@@ -69,7 +72,7 @@ public class ExpenseController {
 				amountMax,
 				submittedFrom,
 				submittedTo);
-		var user = (LoginUser)SecurityContextHolder.getContext().getAuthentication();
+	
 		return ResponseEntity.ok().body(
 				expenseService.search(criteria, page, size));
 	}
@@ -88,7 +91,8 @@ public class ExpenseController {
 			@PathVariable Long id,
 			@RequestParam int version,
 			@RequestBody @Valid RejectRequest req) {
-		var user = (LoginUser)SecurityContextHolder.getContext().getAuthentication();
+
+		var user = (LoginUser)SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 		return ResponseEntity.ok().body(expenseService.reject(id, req.getReason(), version, user.getUserId()));
 	}
 }

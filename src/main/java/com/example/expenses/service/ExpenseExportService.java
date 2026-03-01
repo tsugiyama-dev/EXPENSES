@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.springframework.stereotype.Service;
 
@@ -39,6 +40,7 @@ public class ExpenseExportService {
 			throw new IllegalArgumentException("exportTypeが不正です：" + exportType);
 		}
 		
+		Stream.of(List.of("hikaru", "yasuk", "syuji", "sana")).map(null).toList();
 		List<Expense> expenses = expenseMapper.filter(ExpenseSearchCriteria.toEntity(criteria), "created_at", "DESC");
 		return strategy.export(expenses);
 		

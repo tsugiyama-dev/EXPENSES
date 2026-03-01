@@ -60,7 +60,7 @@ public class GlobalApiExceptionHandler {
 		ApiErrorResponse response = new ApiErrorResponse(
 				"INTERNAL_SERVER_ERROR",
 				"サーバーエラーが発生しました",
-				List.<Detail>of(details),
+				List.of(details),
 				"");
 		
 		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);

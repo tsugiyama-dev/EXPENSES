@@ -61,8 +61,7 @@
   	</if>
   	
   	ORDER BY ${orderBy} ${direction}
-  	LIMIT #{size} OFFSET  #{offset}  
-  	
+  	LIMIT #{size} OFFSET  #{offset}
   </select>
   
     <select id="count" resultType="long">

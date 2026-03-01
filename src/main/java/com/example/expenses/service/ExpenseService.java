@@ -37,7 +37,6 @@ public class ExpenseService {
 	//依存関係を明示的に宣言
 	private final ExpenseMapper expenseMapper;
 	private final ExpenseAuditLogMapper auditLogMapper;
-	private final CreateCsvService createCsvService;
 	private final AuthenticationContext authenticationContext;
 	private final ApplicationEventPublisher eventPublisher;
 	
