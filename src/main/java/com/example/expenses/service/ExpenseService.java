@@ -11,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.expenses.config.TraceIdFilter;
 import com.example.expenses.domain.Expense;
-import com.example.expenses.domain.ExpenseStatus;
 import com.example.expenses.dto.ExpenseAuditLog;
 import com.example.expenses.dto.request.ExpenseCreateRequest;
 import com.example.expenses.dto.request.ExpenseSearchCriteria;
@@ -24,7 +23,6 @@ import com.example.expenses.event.ExpenseSubmittedEvent;
 import com.example.expenses.exception.BusinessException;
 import com.example.expenses.repository.ExpenseAuditLogMapper;
 import com.example.expenses.repository.ExpenseMapper;
-import com.example.expenses.util.CurrentUser;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +32,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ExpenseService {
 
-	//依存関係を明示的に宣言
 	private final ExpenseMapper expenseMapper;
 	private final ExpenseAuditLogMapper auditLogMapper;
 	private final AuthenticationContext authenticationContext;
@@ -71,7 +68,7 @@ public class ExpenseService {
 				traceId()
 		));
 		
-		return toResponse(expense);
+		return ExpenseResponse.toResponse(expense);
 	}
 	
 	//検索条件に基づいて経費申請のリストを取得し、ページネーションされたレスポンスを返す
@@ -128,13 +125,10 @@ public class ExpenseService {
 			throw new NoSuchElementException("Expense not found: " + expenseId);
 		}
 		
-		if(!current.getApplicantId().equals(userId)) {
-			throw new BusinessException("NOT_OWNER", "本人以外は提出できません");
+		if(!current.canBeSubmittedBy(userId)) {
+			throw new BusinessException("INVALID_STATUS_TRANSITION", "ステータスもしくは本人ではないため提出できません");
 		}
-		//ビジネスルールチェック
-		if(current.getStatus() != ExpenseStatus.DRAFT) {
-			throw new BusinessException("INVALID_STATUS_TRANSITION", "下書き以外提出できません");
-		}
+		
 		//提出処理
 		int updated = expenseMapper.submitDraft(expenseId);
 		
@@ -143,7 +137,7 @@ public class ExpenseService {
 					"下書き以外提出できません");
 		}
 		//監査ログ登録
-		auditLogMapper.insert(ExpenseAuditLog.createDraft(expenseId, CurrentUser.actorId(), traceId()));
+		auditLogMapper.insert(ExpenseAuditLog.createDraft(expenseId, userId, traceId()));
 		
 		//イベント発行
 		eventPublisher.publishEvent(
@@ -155,7 +149,7 @@ public class ExpenseService {
 		
 		//6.結果を返す
 		Expense saved = expenseMapper.findById(expenseId);
-		return toResponse(saved);
+		return ExpenseResponse.toResponse(saved);
 	}
 	
 	/**
@@ -173,10 +167,10 @@ public class ExpenseService {
 			throw new BusinessException("NOT_FOUND", "経費申請が見つかりません: EXPENSEID ：" + expenseId, traceId());
 		}
 		
-		//ビジネスルールチェック
-		if(expense.getStatus() != ExpenseStatus.SUBMITTED) {
-			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は承認できません", traceId());
+		if(!expense.canBeApproved()) {
+			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は承認できません", traceId());	
 		}
+		
 		//二重更新チェック
 		if(expense.getVersion()!= version) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId());
@@ -222,7 +216,7 @@ public class ExpenseService {
 			throw new BusinessException("NOT_FOUND", "経費申請が見つかりません: EXPENSEID ：" + expenseId, traceId);
 		}
 		//ビジネスルールチェック
-		if(expense.getStatus() != ExpenseStatus.SUBMITTED) {
+		if(!expense.canBeRejected()) {
 			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は却下できません", traceId);	
 		}
 		//二重更新チェック
@@ -250,13 +244,9 @@ public class ExpenseService {
 						));
 		//更新後の経費を取得して返す
 		var saved = expenseMapper.findById(expenseId);
-		return toResponse(saved);
+		return ExpenseResponse.toResponse(saved);
 	}
 	
-
-	private ExpenseResponse toResponse(Expense expense) {
-		return ExpenseResponse.toResponse(expense);
-	}
 	
 	private String traceId() {
 		String tid = MDC.get(TraceIdFilter.TRACE_ID_KEY);

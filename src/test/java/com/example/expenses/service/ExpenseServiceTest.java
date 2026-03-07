@@ -6,6 +6,8 @@ import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -20,13 +22,9 @@ import com.example.expenses.dto.response.ExpenseResponse;
 import com.example.expenses.repository.ExpenseAuditLogMapper;
 import com.example.expenses.repository.ExpenseMapper;
 
-//@ExtendWith(MockitoExtension.class)
-//@WebMvcTest(ExpenseController.class)
-
-
 /**
  * ExpenseServiceのユニットテスト
- * モックを使用してデータベースなしでテスト可能
+ * モックを使用してＤＢなしでテスト
  */
 @ExtendWith(MockitoExtension.class)
 class ExpenseServiceTest {
@@ -42,8 +40,9 @@ class ExpenseServiceTest {
 	private ExpenseService expenseService;
 	
 	@Test
-	void expenseCreate_Success() {
-		// テストコードをここに記述
+	@DisplayName("正常系：経費を作成できる")
+	void 経費を作成できる() {
+		//Given ユーザーIDとリクエストデータ
 		Long expectedUserId = 123L;
 		ExpenseCreateRequest request = new ExpenseCreateRequest(
 				"出張費",
@@ -52,79 +51,93 @@ class ExpenseServiceTest {
 				);
 		// モックの振る舞いを定義
 		when(authenticationContext.getCurrentUserId()).thenReturn(expectedUserId);
-		
-		// expenseMapperのinsertメソッドが呼ばれたときに、引数のExpenseオブジェクトにIDを設定するようにする
+	
 		doAnswer(invocation -> {
 			Expense expense = invocation.getArgument(0);
-			expense = Expense.create(expectedUserId,expense.getTitle(), expense.getAmount(), expense.getCurrency()); // モックのinsertメソッドが呼ばれたときにIDを設定
-//			expense..setId(expectedUserId); // モックのinsertメソッドが呼ばれたときにIDを設定
 			return null;
-		}).when(expenseMapper).insert(any(Expense.class));
+		}).
+		when(expenseMapper).insert(any(Expense.class));
 		
-		// テスト対象のメソッドを呼び出す
+		doAnswer(inv -> {
+			ExpenseAuditLog arg = inv.getArgument(0);
+
+			return null;
+		}).
+		when(auditLogMapper).insert(any(ExpenseAuditLog.class));
+		
+		
+		//  when テスト対象のメソッドを呼び出す
 		ExpenseResponse response = expenseService.create(request);
 		
-		// 結果を検証
+		// then 正しい値が返される
 		assertThat(response).isNotNull();
 		assertThat(response.applicantId()).isEqualTo(expectedUserId);
 		assertThat(response.title()).isEqualTo("出張費");
 		assertThat(response.amount()).isEqualTo(new BigDecimal("10000"));
 		
-		//methodが呼び出されたかを検証
+		// then 必要なメソッドが呼び出されたか
 		verify(authenticationContext).getCurrentUserId();
 		verify(expenseMapper).insert(any(Expense.class));
 		verify(auditLogMapper).insert(any(ExpenseAuditLog.class));
-		
-		
-	}
-	
-	
-	@Test
-	void expenseSearch_other_than_approver_only_owners_expenses_get() { //other than～  ～以外
-		
-		Long userId = 123L;
-		
-		when(authenticationContext.getCurrentUserId()).thenReturn(userId);
-		when(authenticationContext.isApprover()).thenReturn(false);
-		
-		ExpenseSearchCriteria criteria = new ExpenseSearchCriteria(
-				null, null, null,null,null,null,null,null
-				);
-		// テスト対象のメソッドを呼び出す
-		expenseService.search(criteria, 1, 10);
-		
-		verify(expenseMapper).search(
-				argThat(c -> c.getApplicantId().equals(userId))
-				,anyString()
-				,anyString()
-				,anyInt()
-				,anyInt()
-		);
 
 	}
-	@Test
-	void expenseSearch_approver_all_expenses_get() { 
+	
+	@Nested
+	@DisplayName("経費検索")
+	class SearchTest {
 		
-		Long approverId = 456L;
-		
-		when(authenticationContext.getCurrentUserId()).thenReturn(approverId);
-		when(authenticationContext.isApprover()).thenReturn(true);
-		
-		ExpenseSearchCriteria criteria = new ExpenseSearchCriteria(
-				null ,null , null,null,null,null,null,null
-				);
-		// テスト対象のメソッドを呼び出す
-		expenseService.search(criteria, 1, 10);
-		
-		verify(expenseMapper).search(
-				//applicantIdでフィルタされていないことを検証
-				argThat(c -> c.getApplicantId() == null)
-				,anyString()
-				,anyString()
-				,anyInt()
-				,anyInt()
-				);
-		
+		@Test
+		@DisplayName("一般ユーザー：自分の経費のみ取得できる")
+		void 自分の経費の未取得できる() {
+			
+			//Given 一般ユーザー
+			Long userId = 123L;
+			
+			ExpenseSearchCriteria criteria = new ExpenseSearchCriteria(
+					null, null, null,null,null,null,null,null
+					);
+			//モックの振る舞いを定義
+			when(authenticationContext.getCurrentUserId()).thenReturn(userId);
+			when(authenticationContext.isApprover()).thenReturn(false);
+			
+			//when テスト対象のメソッドを呼び出す
+			expenseService.search(criteria, 1, 10);
+			
+			//then 必要なメソッドが呼ばれたか
+			verify(expenseMapper).search(
+					argThat(c -> c.getApplicantId().equals(userId))
+					,anyString()
+					,anyString()
+					,anyInt()
+					,anyInt()
+					);
+			
+		}
+		@Test
+		@DisplayName("承認者：すべての経費を取得できる")
+		void 承認者はすべての経費を取得できる() { 
+			
+			Long approverId = 456L;
+			
+			when(authenticationContext.getCurrentUserId()).thenReturn(approverId);
+			when(authenticationContext.isApprover()).thenReturn(true);
+			
+			ExpenseSearchCriteria criteria = new ExpenseSearchCriteria(
+					null ,null , null,null,null,null,null,null
+					);
+			// テスト対象のメソッドを呼び出す
+			expenseService.search(criteria, 1, 10);
+			
+			verify(expenseMapper).search(
+					//applicantIdでフィルタされていないことを検証
+					argThat(c -> c.getApplicantId() == null)
+					,anyString()
+					,anyString()
+					,anyInt()
+					,anyInt()
+					);
+			
+		}
 	}
 
 }

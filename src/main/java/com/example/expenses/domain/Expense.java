@@ -52,42 +52,7 @@ public class Expense {
 		return expense;
 	}
 	
-	/**
-	 * 経費が下書き状態のときのみ更新可能
-	 */
-	public void submit() {
-		if(this.status != ExpenseStatus.DRAFT) {
-			throw new IllegalStateException("下書き状態の経費のみ提出可能です");
-		}
-		
-		this.status = ExpenseStatus.SUBMITTED;
-		this.submittedAt = LocalDateTime.now();
-		this.version++;
-	}
-	/**
-	 * 提出された経費のみ承認可能
-	 */
-	public void approve() {
-		if(this.status != ExpenseStatus.SUBMITTED) {
-			throw new IllegalStateException("提出された経費の未承認できます");
-		}
-		
-		this.status = ExpenseStatus.APPROVED;
-		this.updatedAt = LocalDateTime.now();
-		this.version++;
-	}
-	/**
-	 *  提出された経費のみ却下可能
-	 */
-	public void reject(String reason) {
-		if(this.status != ExpenseStatus.SUBMITTED) {
-			throw new IllegalStateException("提出された経費のみ却下可能です");
-		}
-		
-		this.status = ExpenseStatus.REJECTED;
-		this.updatedAt = LocalDateTime.now();
-		this.version++;
-	}
+
 	/**
 	 * 本人で下書き状態の経費のみ提出可能
 	 */
