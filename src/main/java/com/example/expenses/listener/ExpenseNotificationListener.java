@@ -1,6 +1,7 @@
 package com.example.expenses.listener;
 
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import com.example.expenses.event.ExpenseApprovedEvent;
@@ -23,12 +24,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ExpenseNotificationListener {
 
-	private final NotificationService notificationService;//通知サービスの依存注入
-	private final UserMapper userMapper;//ユーザーマッパーの依存注入
+	private final NotificationService notificationService;
+	private final UserMapper userMapper;
 	
 	/**
 	 * 経費が承認されたときの通知
 	 */
+	@Async
 	@EventListener
 	public void handleExpenseApproved(ExpenseApprovedEvent event) {
 		try {
@@ -49,7 +51,10 @@ public class ExpenseNotificationListener {
 			
 		}
 	}
-	
+	/**
+	 * 経費が却下されたときの通知
+	 */
+	@Async
 	@EventListener
 	public void handleExpenseReject(ExpenseRejectedEvent event) {
 		
@@ -64,7 +69,10 @@ public class ExpenseNotificationListener {
 		}
 		
 	}
-	
+	/**
+	 * 経費が提出されたときの通知
+	 */
+	@Async
 	@EventListener
 	public void handleExpenseSubmitted(ExpenseSubmittedEvent event) {
 		

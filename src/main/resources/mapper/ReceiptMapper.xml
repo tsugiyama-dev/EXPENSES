@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+  
+<mapper namespace="com.example.expenses.repository.ReceiptMapper">
+
+	<insert id="insert" useGeneratedKeys="true" keyProperty="id">
+		INSERT INTO receipts (
+			expense_id, original_filename, stored_filename, file_path,
+			content_type, file_size, uploaded_by, uploaded_at
+		) VALUES (
+			#{expenseId}, #{originalFilename}, #{storedFilename}, #{filePath},
+			#{contentType}, #{fileSize}, #{uploadedBy}, #{uploadedAt}
+		)
+	</insert>
+	
+	<select id="findById" resultType="com.example.expenses.domain.Receipt">
+		SELECT 
+			id, expense_id, original_filename, stored_filename, file_path,
+			content_type, file_size, uploaded_by, uploaded_at
+		FROM receipts
+		WHERE id = #{id}
+	</select>
+	
+	<select id="findByExpenseId" resultType="com.example.expenses.domain.Receipt">
+		SELECT 
+			id, expense_id, original_filename, stored_filename, file_path,
+			content_type, file_size, uploaded_by, uploaded_at
+		FROM receipts
+		WHERE expense_id = #{expenseId}
+	</select>
+	
+	<delete id="deleteById">
+		DELETE FROM receipts
+		WHERE id = #{id}
+	</delete>
+	
+	<select id="countByExpenseId" resultType="int">
+		SELECT COUNT(expense_id)
+		FROM receipts
+		WHERE expense_id = #{expenseId}
+	</select>
+</mapper>
