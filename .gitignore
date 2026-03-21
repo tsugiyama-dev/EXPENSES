@@ -13,24 +13,6 @@ target/
 .springBeans
 .sts4-cache
 
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
-.vscode/
 ###################
 # 機密情報（最重要）
 ###################
@@ -73,11 +55,7 @@ log/
 ###################
 # IDE設定ファイル
 ###################
-# IntelliJ IDEA
-.idea/
-*.iml
-*.iws
-*.ipr
+
 
 # Eclipse
 .project
@@ -85,24 +63,10 @@ log/
 .settings/
 .metadata/
 
-# VS Code
-.vscode/
-*.code-workspace
-
-# NetBeans
-nbproject/
-nbbuild/
-dist/
-nbdist/
 
 ###################
 # OS関連
 ###################
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
 
 # Windows
 Thumbs.db
@@ -110,9 +74,6 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# Linux
-*~
-.directory
 
 ###################
 # Maven関連
@@ -127,13 +88,6 @@ buildNumber.properties
 .mvn/timing.properties
 .mvn/wrapper/maven-wrapper.jar
 
-###################
-# Gradle関連
-###################
-.gradle/
-gradle-app.setting
-!gradle-wrapper.jar
-!gradle-wrapper.properties
 
 ###################
 # Spring Boot関連
@@ -172,14 +126,6 @@ test-output/
 *.bak
 *.orig
 
-###################
-# Node.js（フロントエンド使う場合）
-###################
-node_modules/
-npm-debug.log
-yarn-error.log
-package-lock.json
-yarn.lock
 
 ###################
 # その他
@@ -200,3 +146,6 @@ bootstrap-*.yaml
 .dockerignore
 docker-compose.override.yml
 .docker/
+
+# アップロードファイル
+uploads/
