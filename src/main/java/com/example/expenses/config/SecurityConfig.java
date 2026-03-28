@@ -44,8 +44,7 @@ public class SecurityConfig {
 				.logoutSuccessUrl("/login")
 				.logoutUrl("/logout")) 
 //		.csrf(t -> t.disable())
-		.httpBasic(Customizer.withDefaults())
-		.csrf(csrf -> csrf.disable());
+		.httpBasic(Customizer.withDefaults());
 		
 		return http.build();
 	}

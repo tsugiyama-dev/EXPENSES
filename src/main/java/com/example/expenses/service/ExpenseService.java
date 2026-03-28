@@ -70,6 +70,18 @@ public class ExpenseService {
 		
 		return ExpenseResponse.toResponse(expense);
 	}
+	/**
+	 * 経費の全件取得
+	 * @param criteria
+	 * @return 経費の一覧
+	 */
+	public List<Expense> getAllExpenses(ExpenseSearchCriteria criteria) {
+		return expenseMapper.findAll(ExpenseSearchCriteria.toEntity(criteria));
+	}
+	
+	public Expense getExpense(Long expenseId) {
+		return expenseMapper.findById(expenseId);
+	}
 	
 	//検索条件に基づいて経費申請のリストを取得し、ページネーションされたレスポンスを返す
 	public PaginationResponse<ExpenseResponse> search(

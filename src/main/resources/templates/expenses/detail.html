@@ -504,7 +504,36 @@
 				<i class="fas fa-list"></i>
 				経費一覧
 			</h2>
-			<div class="d-flex gap-2">
+			<div class="d-flex gap-2 flex-wrap">
+				<!-- Excelエクスポート -->
+				<a th:href="@{/api/exports/excel/expenses(
+							applicantId=${criteria.applicantId},
+							status=${criteria.status},
+							title=${criteria.title},
+							amountMin=${criteria.amountMin},
+							amountMax=${criteria.amountMax},
+							submittedFrom=${criteria.submittedFrom},
+							submittedTo=${criteria.submittedTo}
+						)}"
+					class="btn btn-success">
+					<i class="fas fa-file-excel"></i> Excelダウンロード
+				</a>
+
+				<!-- PDFエクスポート -->
+				<a th:href="@{/api/exports/pdf/expenses(
+							applicantId=${criteria.applicantId},
+							status=${criteria.status},
+							title=${criteria.title},
+							amountMin=${criteria.amountMin},
+							amountMax=${criteria.amountMax},
+							submittedFrom=${criteria.submittedFrom},
+							submittedTo=${criteria.submittedTo}
+						)}"
+					class="btn btn-danger">
+					<i class="fas fa-file-pdf"></i> PDFダウンロード
+				</a>
+
+				<!-- CSVダウンロード（既存） -->
 				<a th:href="@{/expenses/csv(
 							applicantId=${criteria.applicantId},
 							status=${criteria.status},
@@ -515,8 +544,9 @@
 							submittedTo=${criteria.submittedTo}
 						)}"
 					class="btn btn-outline-primary">
-					<i class="fas fa-download"></i> CSVダウンロード
+					<i class="fas fa-file-csv"></i> CSV
 				</a>
+
 				<a th:href="@{/expenses/log/list}" class="btn btn-outline-secondary">
 					<i class="fas fa-history"></i> ログ一覧
 				</a>
