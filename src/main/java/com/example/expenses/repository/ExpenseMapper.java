@@ -98,7 +98,7 @@ public interface ExpenseMapper {
 			FROM expenses
 			<where>
 				<if test="criteria.applicantId != null">
-					applicant_id = #{criteria.applicantId}
+					AND applicant_id = #{criteria.applicantId}
 				</if>
 				<if test="criteria.status != null and criteria.status != ''">
 					AND status = #{criteria.status}

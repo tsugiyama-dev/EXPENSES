@@ -75,8 +75,20 @@ public class ExpenseService {
 	 * @param criteria
 	 * @return 経費の一覧
 	 */
-	public List<Expense> getAllExpenses(ExpenseSearchCriteria criteria) {
-		return expenseMapper.findAll(ExpenseSearchCriteria.toEntity(criteria));
+	public List<Expense> getAllExpenses(ExpenseSearchCriteria criteria, Long userId) {
+
+		ExpenseSearchCriteriaEntity e = new ExpenseSearchCriteriaEntity();
+		
+		if(authenticationContext.isOwnerOrApprover(userId)) {
+			e.setTitle(criteria.title());
+			e.setAmountMax(criteria.amountMax());
+			e.setAmountMin(criteria.amountMin());
+			e.setSubmittedFrom(criteria.submittedFrom());
+			e.setSubmittedTo(criteria.submittedTo());
+			e.setStatus(criteria.status());
+			e.setApplicantId(userId);
+		}
+		return expenseMapper.findAll(e);
 	}
 	
 	public Expense getExpense(Long expenseId) {

@@ -53,7 +53,7 @@ public class ExportController {
 		
 		try {
 			// 経費一覧を取得
-			List<Expense> expenses = expenseService.getAllExpenses(criteria);
+			List<Expense> expenses = expenseService.getAllExpenses(criteria, loginUser.getUserId());
 			
 			// Excelファイルを生成
 			byte[] excelData = excelExportService.exportExpenseList(expenses);
@@ -102,7 +102,7 @@ public class ExportController {
 	    logger.info("経費一覧PDFエクスポート開始：user={},criteria={}", loginUser.getUsername(), criteria);
 	    
 	    try {
-	    	List<Expense> expenses = expenseService.getAllExpenses(criteria);
+	    	List<Expense> expenses = expenseService.getAllExpenses(criteria, loginUser.getUserId());
 	    	
 	    	byte[] pdfData = pdfExportService.exportExpenseList(expenses);
 	    	
