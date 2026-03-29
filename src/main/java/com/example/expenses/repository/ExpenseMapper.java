@@ -146,6 +146,35 @@ public interface ExpenseMapper {
 	 * @return
 	 */
 	long count(@Param("criteria")ExpenseSearchCriteriaEntity criteria);
+
+	/**
+	 * 期間内の経費を取得（バッチ処理用）
+	 * @param startDate 開始日時
+	 * @param endDate 終了日時
+	 * @return 経費リスト
+	 */
+	@Select("""
+			SELECT
+				id, applicant_id, title, amount, currency, status,
+				submitted_at, created_at, updated_at, version
+			FROM expenses
+			WHERE created_at >= #{startDate} AND created_at <= #{endDate}
+			ORDER BY created_at ASC
+			""")
+	@ConstructorArgs({
+		@Arg(column = "id", javaType = Long.class, id = true),
+		@Arg(column = "applicant_id", javaType = Long.class),
+		@Arg(column = "title", javaType = String.class),
+		@Arg(column = "amount", javaType = BigDecimal.class),
+		@Arg(column = "currency", javaType = String.class),
+		@Arg(column = "status", javaType = ExpenseStatus.class),
+		@Arg(column = "submitted_at", javaType = LocalDateTime.class),
+		@Arg(column = "created_at", javaType = LocalDateTime.class),
+		@Arg(column = "updated_at", javaType = LocalDateTime.class),
+		@Arg(column = "version", javaType = Integer.class)
+	})
+	List<Expense> findByPeriod(@Param("startDate") LocalDateTime startDate,
+	                            @Param("endDate") LocalDateTime endDate);
 	
 	/**
 	 *  経費を承認する
