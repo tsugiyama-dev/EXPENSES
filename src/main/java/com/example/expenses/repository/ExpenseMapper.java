@@ -188,4 +188,14 @@ public interface ExpenseMapper {
 			@Param("criteria")ExpenseSearchCriteriaEntity criteria,
 			@Param("orderBy")String orderBy,
 			@Param("direction")String direction);
+	
+	@Select("""
+			SELECT id, applicant_id, title, amount, currency, status,
+			submitted_at, created_at, updated_at, version
+			FROM expenses
+			WHERE submitted_at >= #{start}
+			  AND submitted_at <= #{end}
+			ORDER BY created_at ASC
+			""")
+	List<Expense> findByPeriod(LocalDateTime start, LocalDateTime end);
 }
