@@ -11,6 +11,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import com.example.expenses.batch.tasklet.DataAggregationTasklet;
+import com.example.expenses.batch.tasklet.EmailNotificationTasklet;
+import com.example.expenses.batch.tasklet.ReportGenerationTasklet;
 
 import lombok.RequiredArgsConstructor;
 
@@ -21,10 +23,10 @@ public class BatchConfiguration {
 
 	private final DataAggregationTasklet dataAggregationTasklet;
 	private final ReportGenerationTasklet reportGenerationTasklet;
-	private final EmailnotificationTasklet emailnotificationTasklet;
+	private final EmailNotificationTasklet emailNotificationTasklet;
 	
 	@Bean
-	public Job monthlyExpenseReportJob(JobRepository jobRepository,
+	Job monthlyExpenseReportJob(JobRepository jobRepository,
 			Step dataAggregationStep,
 			Step reportGenerationStep,
 			Step emailNotificationStep) {
