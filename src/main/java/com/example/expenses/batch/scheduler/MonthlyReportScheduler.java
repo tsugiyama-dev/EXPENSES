@@ -8,7 +8,7 @@ import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.job.parameters.JobParametersBuilder;
-import org.springframework.batch.core.launch.support.TaskExecutorJobOperator;
+import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class MonthlyReportScheduler {
 
-	private final TaskExecutorJobOperator jobOperator;
+	private final JobOperator jobOperator;
 	private final Job monthlyExpenseReportJob;
 	private final Logger logger = LoggerFactory.getLogger(MonthlyReportScheduler.class);
 	
