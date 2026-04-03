@@ -45,7 +45,7 @@ public class EmailNotificationTasklet implements Tasklet {
 				.getStepExecution()
 				.getJobExecution()
 				.getExecutionContext()
-				.get("monthylyReport");
+				.get("monthlyReport");
 		
 		String reportFilePath = (String) chunkContext.getStepContext()
 				.getStepExecution()

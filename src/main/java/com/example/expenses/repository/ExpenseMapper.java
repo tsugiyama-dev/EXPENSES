@@ -197,5 +197,5 @@ public interface ExpenseMapper {
 			  AND submitted_at <= #{end}
 			ORDER BY created_at ASC
 			""")
-	List<Expense> findByPeriod(LocalDateTime start, LocalDateTime end);
+	List<Expense> findByPeriod(@Param("start")LocalDateTime start,@Param("end") LocalDateTime end);
 }

@@ -36,7 +36,8 @@ public class DataAggregationTasklet implements Tasklet {
 		logger.info("データ集計タスクレット開始");
 		
 		// 前月の年月を計算
-		YearMonth lastMonth = YearMonth.now().minusMonths(1);
+		YearMonth lastMonth = YearMonth.now();
+//		YearMonth lastMonth = YearMonth.now().minusMonths(1);
 		LocalDateTime startDate = lastMonth.atDay(1).atStartOfDay();
 		LocalDateTime endDate = lastMonth.atEndOfMonth().atTime(23, 59, 59);
 		
