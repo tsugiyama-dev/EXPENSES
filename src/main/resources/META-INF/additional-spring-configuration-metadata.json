@@ -1,0 +1,27 @@
+{"properties": [
+  {
+    "name": "batch.schedule.monthly-report",
+    "type": "java.lang.String",
+    "description": "A description for 'batch.schedule.monthly-report'"
+  },
+  {
+    "name": "app.mail.from",
+    "type": "java.lang.String",
+    "description": "A description for 'app.mail.from'"
+  },
+  {
+    "name": "batch.notification.admin-email",
+    "type": "java.lang.String",
+    "description": "A description for 'batch.notification.admin-email'"
+  },
+  {
+    "name": "file.upload-dir",
+    "type": "java.lang.String",
+    "description": "A description for 'file.upload-dir'"
+  },
+  {
+    "name": "batch.report.output-dir",
+    "type": "java.lang.String",
+    "description": "A description for 'batch.report.output-dir'"
+  }
+]}

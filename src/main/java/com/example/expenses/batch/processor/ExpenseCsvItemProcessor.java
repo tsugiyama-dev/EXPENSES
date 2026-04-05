@@ -23,8 +23,10 @@ public class ExpenseCsvItemProcessor implements ItemProcessor<ExpenseCsvRow, Exp
 		if(item.getApplicantId() == null) {
 			return null; // 申請者IDが無効な場合はスキップ
 		}
+		
+		BigDecimal amount;
 		try {
-			BigDecimal amount = new BigDecimal(item.getAmount());
+			amount = new BigDecimal(item.getAmount());
 			if(amount.compareTo(BigDecimal.ZERO) <= 0) {
 				return null; // 金額が正の数でない場合はスキップ
 			}
@@ -36,7 +38,7 @@ public class ExpenseCsvItemProcessor implements ItemProcessor<ExpenseCsvRow, Exp
 		return Expense.create(
 				item.getApplicantId(),
 				item.getTitle(),
-				new BigDecimal(item.getAmount()),
+				amount,
 				item.getCurrency()
 		);
 	}

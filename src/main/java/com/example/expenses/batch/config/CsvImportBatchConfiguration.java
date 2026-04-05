@@ -31,8 +31,8 @@ public class CsvImportBatchConfiguration {
 		
 		return new FlatFileItemReaderBuilder<ExpenseCsvRow>()
 				.name("expenseCsvReader")
-				.resource(new ClassPathResource("/csv/sample.csv"))
-				.linesToSkip(1) // ヘッダー行をスキップ
+				.resource(new ClassPathResource("csv/sample.csv"))
+				.linesToSkip(6) // ヘッダー行をスキップ
 				.delimited()
 				.names("applicantId", "title", "amount", "currency")
 				.targetType(ExpenseCsvRow.class)
@@ -41,10 +41,10 @@ public class CsvImportBatchConfiguration {
 	
 	@Bean
 	Step csvImportStep(JobRepository jobRepository,
-			PlatformTransactionManager transactonManager,
+			PlatformTransactionManager transactionManager,
 			FlatFileItemReader<ExpenseCsvRow> expenseCsvReader) {
 		return new StepBuilder("csvImportStep", jobRepository)
-				.<ExpenseCsvRow, Expense>chunk(100, transactonManager)
+				.<ExpenseCsvRow, Expense>chunk(100, transactionManager)
 				.reader(expenseCsvReader)
 				.processor(processor)
 				.writer(writer)

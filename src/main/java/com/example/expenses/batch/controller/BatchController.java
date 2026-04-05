@@ -23,6 +23,7 @@ public class BatchController {
 	private final Logger logger = LoggerFactory.getLogger(getClass());
 	private final Job csvImportJob;
 	private final JobOperator jobOperator;
+
 	
 	@GetMapping("/execute")
 	public ResponseEntity<String> executeBatchJob() {

@@ -12,8 +12,6 @@ import lombok.RequiredArgsConstructor;
 @Component
 @RequiredArgsConstructor
 public class ExpenseCsvItemWriter implements ItemWriter<Expense> {
-	{
-}
 
 	private final ExpenseMapper expenseMapper;
 
