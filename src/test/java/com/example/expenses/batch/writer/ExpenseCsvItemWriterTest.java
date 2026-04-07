@@ -45,6 +45,8 @@ class ExpenseCsvItemWriterTest {
 		verify(expenseMapper, times(1)).insert(expense2);
 		verify(expenseMapper, times(1)).insert(expense3);
 		
+
+		
 		
 	}
 	
@@ -60,6 +62,7 @@ class ExpenseCsvItemWriterTest {
 		
 		//Then
 		verify(expenseMapper, never()).insert(any());
+
 	}
 
 }
