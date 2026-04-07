@@ -32,7 +32,7 @@ public class CsvImportBatchConfiguration {
 		return new FlatFileItemReaderBuilder<ExpenseCsvRow>()
 				.name("expenseCsvReader")
 				.resource(new ClassPathResource("csv/sample.csv"))
-				.linesToSkip(6) // ヘッダー行をスキップ
+				.linesToSkip(1) // ヘッダー行をスキップ
 				.delimited()
 				.names("applicantId", "title", "amount", "currency")
 				.targetType(ExpenseCsvRow.class)
