@@ -1,5 +1,8 @@
 package com.example.expenses.batch.writer;
 
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -32,8 +35,31 @@ class ExpenseCsvItemWriterTest {
 		Expense expense3 = Expense.create(3L, "宿泊費", new BigDecimal(3000), "JPY");
 		Chunk<Expense> chunk = new Chunk<>(List.of(expense1, expense2, expense3));
 		
-//		doAnswer()(expenseMapper.insert(expense1)).thenReturn(1);
+		try {
+			writer.write(chunk);
+		} catch (Exception e) {
+			// TODO 自動生成された catch ブロック
+			e.printStackTrace();
+		}
+		verify(expenseMapper, times(1)).insert(expense1);
+		verify(expenseMapper, times(1)).insert(expense2);
+		verify(expenseMapper, times(1)).insert(expense3);
 		
+		
+	}
+	
+	@Test
+	@DisplayName("空のチャンクの場合何も実行されない")
+	void 空のチャンクの場合何も実行されない() throws Exception {
+		
+		//Given
+		Chunk<Expense> chunk = new Chunk<>();
+		
+		//When
+		writer.write(chunk);
+		
+		//Then
+		verify(expenseMapper, never()).insert(any());
 	}
 
 }
