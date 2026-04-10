@@ -16,16 +16,14 @@ import org.springframework.batch.test.context.SpringBatchTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.jdbc.Sql;
 
-import com.example.expenses.config.TestContainersConfiguration;
 import com.example.expenses.repository.ExpenseMapper;
 
 @SpringBootTest
 @SpringBatchTest
 @DisplayName("Batch処理が正常に動作しているか")
 @Import(TestContainersConfiguration.class)
-@Sql(scripts = "/db/cleanup-expenses.sql", executionPhase=Sql.ExecutionPhase.BEFORE_TEST_METHOD)
+//@Sql(scripts = "/db/cleanup-expenses.sql", executionPhase=Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 class CsvImportBatchConfigurationTest {
 	
 	@Autowired
@@ -57,6 +55,31 @@ class CsvImportBatchConfigurationTest {
 			
 		//Then
 		assertThat(jobExecution.getExitStatus()).isEqualTo(ExitStatus.COMPLETED);//(jobExecution.getExitStatus())
+		
+	}
+	
+	@Test
+	@DisplayName("CSVの10行中、3行がスキップされ7行がDBに保存される")
+	void testCsvImportJob_SkipAndWrite() throws Exception {
+		
+		//Given
+		JobParameters jobParameters =new JobParametersBuilder()
+				.addLong("executionTime", System.currentTimeMillis())
+				.toJobParameters();
+		
+		//When
+		JobExecution jobExecution = jobLauncherTestUtils.launchJob(jobParameters);
+		
+		//Then
+		//ジョブの実行結果を確認
+		assertThat(jobExecution.getExitStatus()).isEqualTo(ExitStatus.COMPLETED);
+		
+		//Stepの統計情報を確認
+		jobExecution.getStepExecutions().forEach(stepExecution -> {
+			assertThat(stepExecution.getReadCount()).isEqualTo(10);
+			assertThat(stepExecution.getWriteCount()).isEqualTo(7);
+		    assertThat(stepExecution.getReadSkipCount() + stepExecution.getProcessSkipCount()).isEqualTo(3);
+		});
 	}
 
 }
