@@ -16,14 +16,17 @@ import org.springframework.batch.test.context.SpringBatchTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.testcontainers.utility.TestcontainersConfiguration;
 
 import com.example.expenses.repository.ExpenseMapper;
 
 @SpringBootTest
 @SpringBatchTest
 @DisplayName("Batch処理が正常に動作しているか")
-@Import(TestContainersConfiguration.class)
+@Import(TestcontainersConfiguration.class)
 //@Sql(scripts = "/db/cleanup-expenses.sql", executionPhase=Sql.ExecutionPhase.BEFORE_TEST_METHOD)
+//@Import(TestcontainersConfiguration.class)
+
 class CsvImportBatchConfigurationTest {
 	
 	@Autowired
@@ -79,6 +82,26 @@ class CsvImportBatchConfigurationTest {
 			assertThat(stepExecution.getReadCount()).isEqualTo(10);
 			assertThat(stepExecution.getWriteCount()).isEqualTo(7);
 		    assertThat(stepExecution.getReadSkipCount() + stepExecution.getProcessSkipCount()).isEqualTo(3);
+		});
+	}
+	@Test
+	void testCsvImportJobSkipAndWrite() throws Exception {
+		//Give
+		JobParameters jobParameters = new JobParametersBuilder()
+				.addLong("executionTime", System.currentTimeMillis())
+				.toJobParameters();
+		
+		
+		//When
+		JobExecution jobExecution = jobLauncherTestUtils.launchJob(jobParameters);
+		
+		//Then
+		assertThat(jobExecution.getExitStatus()).isEqualTo(ExitStatus.COMPLETED);
+		
+		// Stepの統計情報ヲ確認
+		jobExecution.getStepExecutions().forEach(stepExecution -> {
+		assertThat(stepExecution.getReadCount()).isEqualTo(10);
+		assertThat(stepExecution.getWriteCount()).isEqualTo(7);
 		});
 	}
 

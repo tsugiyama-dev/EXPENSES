@@ -1,4 +1,4 @@
-package com.example.expenses;
+package com.example.expenses.batch.config;
 
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -11,8 +11,9 @@ class TestcontainersConfiguration {
 
 	@Bean
 	@ServiceConnection
-	MySQLContainer mysqlContainer() {
-		return new MySQLContainer(DockerImageName.parse("mysql:8.0"));
+	MySQLContainer<?> mysqlContainer() {
+		return new MySQLContainer<>(DockerImageName.parse("mysql:latest"));
+	
 	}
 
 }
