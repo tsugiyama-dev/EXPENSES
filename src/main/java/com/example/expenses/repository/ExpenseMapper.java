@@ -198,4 +198,9 @@ public interface ExpenseMapper {
 			ORDER BY created_at ASC
 			""")
 	List<Expense> findByPeriod(@Param("start")LocalDateTime start,@Param("end") LocalDateTime end);
+	
+	@Select("""
+			SELECT * FROM expenses ORDER BY id
+			""")
+	List<Expense> findAllForExport();
 }

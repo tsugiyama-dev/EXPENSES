@@ -81,7 +81,8 @@ class CsvImportBatchConfigurationTest {
 		jobExecution.getStepExecutions().forEach(stepExecution -> {
 			assertThat(stepExecution.getReadCount()).isEqualTo(10);
 			assertThat(stepExecution.getWriteCount()).isEqualTo(7);
-		    assertThat(stepExecution.getReadSkipCount() + stepExecution.getProcessSkipCount()).isEqualTo(3);
+		    assertThat(stepExecution.getFilterCount()).isEqualTo(3);
+//		    assertThat(stepExecution.getReadSkipCount() + stepExecution.getProcessSkipCount()).isEqualTo(3);
 		});
 	}
 	@Test

@@ -17,7 +17,8 @@ public class ExpenseCsvItemProcessor implements ItemProcessor<ExpenseCsvRow, Exp
 	@Nullable Expense process(ExpenseCsvRow item) throws Exception {
 		
 		if(item.getTitle() == null || item.getTitle().isBlank()) {
-			return null; // タイトルが空の場合はスキップ
+		    return null; // タイトルが空の場合はスキップ
+//		    throw new NullPointerException(); // タイトルが空の場合はスキップ
 		}
 		
 		if(item.getApplicantId() == null) {
@@ -29,9 +30,11 @@ public class ExpenseCsvItemProcessor implements ItemProcessor<ExpenseCsvRow, Exp
 			amount = new BigDecimal(item.getAmount());
 			if(amount.compareTo(BigDecimal.ZERO) <= 0) {
 				return null; // 金額が正の数でない場合はスキップ
+//				throw new IllegalArgumentException(); // 金額が正の数でない場合はスキップ
 			}
 		} catch (NumberFormatException e) {
 			return null; // 金額が数値でない場合はスキップ
+//			throw new IllegalArgumentException(); // 金額が数値でない場合はスキップ
 		}
 		
 
