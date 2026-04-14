@@ -55,6 +55,7 @@ public class CsvExportBatchConfiguration {
 		return new FlatFileItemWriterBuilder<Expense>()
 				.name("expenseCsvWriter")
 				.resource(new FileSystemResource(outputFile))
+				.encoding("MS932")
 				.lineAggregator(lineAggregator)
 				.headerCallback(writer -> writer.write("id,applicantId,title,amount,currency,status,createdAt")) // ヘッダー行の追加
 				.build();

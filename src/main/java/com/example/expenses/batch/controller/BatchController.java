@@ -1,6 +1,9 @@
 package com.example.expenses.batch.controller;
 
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.job.Job;
@@ -22,6 +25,7 @@ public class BatchController {
 
 	private final Logger logger = LoggerFactory.getLogger(getClass());
 	private final Job csvImportJob;
+	private final Job csvExportJob;
 	private final JobOperator jobOperator;
 
 	
@@ -42,6 +46,28 @@ public class BatchController {
 		}
 		
 		return ResponseEntity.ok().body(jobExecution.getStatus().toString());
+	}
+	
+	@GetMapping("/export")
+	public ResponseEntity<String> executeCsvExportJob() {
+		try {
+			
+			String outputFile = "src/main/resources/csv/export/expenses_"
+					+ LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+					+ ".csv";
+
+			JobParameters jobParameters = new JobParametersBuilder()
+					.addString("csvExportJob", "executionTime=" + System.currentTimeMillis() + ", outputFile=" + outputFile)
+					.toJobParameters();
+			
+			
+			JobExecution jobExecution = jobOperator.start(csvExportJob, jobParameters);
+			
+			return ResponseEntity.ok().body("CSV Export started: " + jobExecution.getId());
+		}catch(Exception e) {
+			logger.error("CSV Export failed", e);
+			return ResponseEntity.internalServerError().body("Export failed: " + e.getMessage());
+		}
 	}
 	
 }
