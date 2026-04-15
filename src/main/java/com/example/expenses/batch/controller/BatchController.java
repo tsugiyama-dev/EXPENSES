@@ -27,6 +27,7 @@ public class BatchController {
 	private final Job csvImportJob;
 	private final Job csvExportJob;
 	private final JobOperator jobOperator;
+	private final Job pagingExportJob;
 
 	
 	@GetMapping("/execute")
@@ -66,6 +67,28 @@ public class BatchController {
 			return ResponseEntity.ok().body("CSV Export started: " + jobExecution.getId());
 		}catch(Exception e) {
 			logger.error("CSV Export failed", e);
+			return ResponseEntity.internalServerError().body("Export failed: " + e.getMessage());
+		}
+	}
+	@GetMapping("/export-paging")
+	public ResponseEntity<String> executePagingExportJob() {
+		
+		try {
+			String outputFile = "src/main/resources/csv/export/expenses_paging_"
+					+ LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")).toString()
+					+ ".csv";
+			
+			JobParameters jobParameters = new JobParametersBuilder()
+					.addLong("executionTime", System.currentTimeMillis())
+					.addString("outputFile", outputFile)
+					.addLong("pageSize", 1000L)
+					.toJobParameters();
+			
+			JobExecution jobExecution = jobOperator.start(pagingExportJob,  jobParameters);
+			
+			return ResponseEntity.ok().body("Paging Export started: " + jobExecution.getId());
+		}catch(Exception e) {
+			logger.error("Paging Export failed", e);
 			return ResponseEntity.internalServerError().body("Export failed: " + e.getMessage());
 		}
 	}

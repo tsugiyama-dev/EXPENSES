@@ -183,6 +183,14 @@
   		</constructor>
   </resultMap>
   
+  <select id="findAllWithPaging" resultMap="expenseResultMap">
+  	SELECT *
+<!--  		id, applicant_id, title, amount, currency, status,-->
+<!--  		created_at-->
+  	FROM expenses
+  	ORDER BY id ASC
+  
+  </select>
   
   
   </mapper>

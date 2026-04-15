@@ -203,4 +203,5 @@ public interface ExpenseMapper {
 			SELECT * FROM expenses ORDER BY id
 			""")
 	List<Expense> findAllForExport();
+	List<Expense> findAllWithPaging();
 }

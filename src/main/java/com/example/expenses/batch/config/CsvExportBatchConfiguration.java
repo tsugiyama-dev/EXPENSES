@@ -43,7 +43,8 @@ public class CsvExportBatchConfiguration {
 	@Bean
 	@StepScope
 	FlatFileItemWriter<Expense> expenseCsvWriter(
-			@Value("#{jobParameters['outputFile'] ?: 'src/main/resources/csv/export/expenses.csv'}")String outputFile) {
+//			@Value("#{jobParameters['outputFile']}")String outputFile) {
+		@Value("#{jobParameters['outputFile'] ?: 'src/main/resources/csv/export/expenses.csv'}")String outputFile) {
 		
 		BeanWrapperFieldExtractor<Expense> fieldExtractor = new BeanWrapperFieldExtractor<>();
 		fieldExtractor.setNames(new String[] {"id", "applicantId", "title", "amount", "currency", "status", "createdAt"});
