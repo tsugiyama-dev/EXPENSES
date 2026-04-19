@@ -36,15 +36,17 @@ public class PagingBatchConfiguration {
 	@Bean
 	@StepScope
 	MyBatisPagingItemReader<Expense> expensePagingReader(
-			@Value("#{jobParameters['pageSize'] ?: 1000}")Long pageSize) {
+			@Value("#{jobParameters['pageSize'] ?: 1000}")Long pageSize,
+			@Value("#{jobParameters['maxId'] ?: 0}") Long maxId) {
 		
 		Map<String, Object> parameterValues = new HashMap<>();
+		parameterValues.put("maxId", maxId);
 		
 		return new MyBatisPagingItemReaderBuilder<Expense>() 
 				.sqlSessionFactory(sqlSessionFactory)
 				.queryId("com.example.expenses.repository.ExpenseMapper.findAllWithPaging")
 				.pageSize(Math.toIntExact(pageSize))
-//				.parameterValues(parameterValues) // 現在パラメータは設定されていない
+				.parameterValues(parameterValues) 
 				.build();
 		
 	}
@@ -84,7 +86,7 @@ public class PagingBatchConfiguration {
 	
 	@Bean
 	@Primary
-    Job paginExportJob(JobRepository jobRepository, Step pagingExportStep) {
+    Job pagingExportJob(JobRepository jobRepository, Step pagingExportStep) {
 		return new JobBuilder("pagingExportJob", jobRepository)
 				.start(pagingExportStep)
 				.build();

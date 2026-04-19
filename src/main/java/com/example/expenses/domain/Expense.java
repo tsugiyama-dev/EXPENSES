@@ -52,7 +52,16 @@ public class Expense {
 		expense.createdAt = LocalDateTime.now();
 		
 		return expense;
-	}	
+	}
+	public Expense(Long applicantId, String title, BigDecimal amount, String currency) {
+		this.applicantId = applicantId;
+		this.title = title;
+		this.amount = amount;
+		this.currency = currency != null ? currency : "JPY";
+		this.status = ExpenseStatus.DRAFT;
+		this.version = 0;
+		this.createdAt = LocalDateTime.now();
+	}
 
 	
 

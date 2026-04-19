@@ -3,6 +3,7 @@ package com.example.expenses.batch.controller;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,87 +11,99 @@ import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.job.parameters.JobParametersBuilder;
-import org.springframework.batch.core.launch.JobOperator;
+import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import lombok.RequiredArgsConstructor;
+import com.example.expenses.repository.ExpenseMapper;
 
 @RestController
 @RequestMapping("/api/batch")
-@RequiredArgsConstructor
+
 public class BatchController {
 
 	private final Logger logger = LoggerFactory.getLogger(getClass());
+	
+	@Qualifier("csvImportJob")
 	private final Job csvImportJob;
+	@Qualifier("csvExportJob")
 	private final Job csvExportJob;
-	private final JobOperator jobOperator;
+	@Qualifier("pagingExportJob")
 	private final Job pagingExportJob;
 
+	private final ExpenseMapper expenseMapper;
 	
+	private final JobLauncher jobLauncher;
+	
+
+	public BatchController(Job csvImportJob, Job csvExportJob, Job pagingExportJob, JobLauncher jobLauncher, ExpenseMapper expenseMapper) {
+		this.csvImportJob = csvImportJob;
+		this.csvExportJob = csvExportJob;
+		this.pagingExportJob = pagingExportJob;
+		this.expenseMapper = expenseMapper;
+		this.jobLauncher = jobLauncher;
+	}
+
+
 	@GetMapping("/execute")
-	public ResponseEntity<String> executeBatchJob() {
+	public ResponseEntity<Map<String, String>> executeBatchJob() {
 		
-		JobParameters jobParameters = new JobParametersBuilder()
+		Long maxId = expenseMapper.findMaxId();
+		String outputFile = "src/main/resources/csv/export/expenses_"
+				+ LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")).toString()
+				+ ".csv";
+		
+		JobParameters param = new JobParametersBuilder()
 				.addLong("executionTime", System.currentTimeMillis())
+				.addLong("maxId", maxId)
+				.addString("outputFile", outputFile)
+				.addLong("pageSize", 1000L)
 				.toJobParameters();
 		
 			JobExecution jobExecution = null;
 		
 		try {
-			jobExecution = jobOperator.start(csvImportJob, jobParameters);
+			jobExecution = jobLauncher.run(pagingExportJob, param);
+		
+			return ResponseEntity.accepted().body(Map.of(
+					"status", jobExecution.getStatus().toString(),
+					"jobId", String.valueOf(jobExecution.getId())
+					));
 		} catch (Exception e) {
 			logger.error("バッチジョブの実行エラーが発生", e);
 		
+			return ResponseEntity.internalServerError().body(
+					Map.of("status", jobExecution.getStatus().toString(),
+							"message", e.getMessage()));
 		}
 		
-		return ResponseEntity.ok().body(jobExecution.getStatus().toString());
 	}
 	
-	@GetMapping("/export")
-	public ResponseEntity<String> executeCsvExportJob() {
-		try {
-			
-			String outputFile = "src/main/resources/csv/export/expenses_"
-					+ LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
-					+ ".csv";
+//	@GetMapping("/export")
+//	public ResponseEntity<String> executeCsvExportJob() {
+//		try {
+//			
+////			String outputFile = "src/main/resources/csv/export/expenses_"
+//			String outputFile = "src/main/resources/csv/sample"
+////					+ LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+//					+ ".csv";
+//
+//			JobParameters jobParameters = new JobParametersBuilder()
+//					.addString("csvExportJob", "executionTime=" + System.currentTimeMillis() + ", outputFile=" + outputFile)
+//					.toJobParameters();
+//			
+//			
+//			JobExecution jobExecution = jobOperator.start(csvExportJob, jobParameters);
+//			
+//			return ResponseEntity.ok().body("CSV Export started: " + jobExecution.getId());
+//		}catch(Exception e) {
+//			logger.error("CSV Export failed", e);
+//			return ResponseEntity.internalServerError().body("Export failed: " + e.getMessage());
+//		}
+//	}
 
-			JobParameters jobParameters = new JobParametersBuilder()
-					.addString("csvExportJob", "executionTime=" + System.currentTimeMillis() + ", outputFile=" + outputFile)
-					.toJobParameters();
-			
-			
-			JobExecution jobExecution = jobOperator.start(csvExportJob, jobParameters);
-			
-			return ResponseEntity.ok().body("CSV Export started: " + jobExecution.getId());
-		}catch(Exception e) {
-			logger.error("CSV Export failed", e);
-			return ResponseEntity.internalServerError().body("Export failed: " + e.getMessage());
-		}
-	}
-	@GetMapping("/export-paging")
-	public ResponseEntity<String> executePagingExportJob() {
-		
-		try {
-			String outputFile = "src/main/resources/csv/export/expenses_paging_"
-					+ LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")).toString()
-					+ ".csv";
-			
-			JobParameters jobParameters = new JobParametersBuilder()
-					.addLong("executionTime", System.currentTimeMillis())
-					.addString("outputFile", outputFile)
-					.addLong("pageSize", 1000L)
-					.toJobParameters();
-			
-			JobExecution jobExecution = jobOperator.start(pagingExportJob,  jobParameters);
-			
-			return ResponseEntity.ok().body("Paging Export started: " + jobExecution.getId());
-		}catch(Exception e) {
-			logger.error("Paging Export failed", e);
-			return ResponseEntity.internalServerError().body("Export failed: " + e.getMessage());
-		}
-	}
 	
 }

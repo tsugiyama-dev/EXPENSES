@@ -199,9 +199,10 @@ public interface ExpenseMapper {
 			""")
 	List<Expense> findByPeriod(@Param("start")LocalDateTime start,@Param("end") LocalDateTime end);
 	
+	List<Expense> findAllWithPaging(@Param("maxId") Long maxId);
+	
 	@Select("""
-			SELECT * FROM expenses ORDER BY id
+			SELECT COALESCE(MAX(id), 0) FROM expenses
 			""")
-	List<Expense> findAllForExport();
-	List<Expense> findAllWithPaging();
+	Long findMaxId();
 }

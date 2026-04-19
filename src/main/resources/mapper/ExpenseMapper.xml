@@ -185,9 +185,8 @@
   
   <select id="findAllWithPaging" resultMap="expenseResultMap">
   	SELECT *
-<!--  		id, applicant_id, title, amount, currency, status,-->
-<!--  		created_at-->
   	FROM expenses
+  	WHERE id <![CDATA[<]]> #{maxId}
   	ORDER BY id ASC
   
   </select>

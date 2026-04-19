@@ -43,6 +43,7 @@ public class ExpenseCsvItemProcessor implements ItemProcessor<ExpenseCsvRow, Exp
 				item.getTitle(),
 				amount,
 				item.getCurrency()
+				
 		);
 	}
 

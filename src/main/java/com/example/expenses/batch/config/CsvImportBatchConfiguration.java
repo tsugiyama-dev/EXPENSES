@@ -35,6 +35,15 @@ public class CsvImportBatchConfiguration {
 				.linesToSkip(1) // ヘッダー行をスキップ
 				.delimited()
 				.names("applicantId", "title", "amount", "currency")
+//				.lineMapper((line, lineNumber) -> {
+//					String[] tokens = line.split(",");
+//					ExpenseCsvRow row = new ExpenseCsvRow();
+//					row.setApplicantId(Long.parseLong(tokens[0].trim()));
+//					row.setTitle(tokens[1].trim());
+//					row.setAmount(tokens[2].trim());
+//					row.setCurrency(tokens[3].trim());
+//					return row;
+//				})
 				.targetType(ExpenseCsvRow.class)
 				.build();
 	}
@@ -49,7 +58,7 @@ public class CsvImportBatchConfiguration {
 				.processor(processor)
 				.writer(writer)
 				.faultTolerant()
-				.skipLimit(50)
+				.skipLimit(1000)
 				.skip(Exception.class) // 例外が発生した行はスキップ
 				.build();
 	}
