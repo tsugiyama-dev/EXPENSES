@@ -3,6 +3,8 @@ package com.example.expenses.batch.config;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.batch.MyBatisCursorItemReader;
 import org.mybatis.spring.batch.builder.MyBatisCursorItemReaderBuilder;
+import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
+import org.springframework.batch.core.configuration.annotation.EnableJdbcJobRepository;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
@@ -24,6 +26,8 @@ import com.example.expenses.domain.Expense;
 import lombok.RequiredArgsConstructor;
 
 @Configuration
+@EnableBatchProcessing
+@EnableJdbcJobRepository
 @RequiredArgsConstructor
 public class CsvExportBatchConfiguration {
 
@@ -70,7 +74,7 @@ public class CsvExportBatchConfiguration {
 			FlatFileItemWriter<Expense> expenseCsvWriter) {
 		
 		return new StepBuilder("csvExportStep", jobRepository)
-				.<Expense, Expense>chunk(100, transactionManager)
+				.<Expense, Expense>chunk(1000, transactionManager)
 				.reader(expenseDbReader)
 				.writer(expenseCsvWriter)
 				.build();
