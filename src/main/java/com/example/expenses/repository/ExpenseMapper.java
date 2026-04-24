@@ -205,4 +205,6 @@ public interface ExpenseMapper {
 			SELECT COALESCE(MAX(id), 0) FROM expenses
 			""")
 	Long findMaxId();
+	
+	List<Expense> findByIdRange(@Param("minId")  Long minId, @Param("maxId") Long maxId);
 }

@@ -12,6 +12,7 @@ import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.job.parameters.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,9 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.expenses.repository.ExpenseMapper;
 
+import lombok.RequiredArgsConstructor;
+
 @RestController
 @RequestMapping("/api/batch")
-
+@RequiredArgsConstructor
 public class BatchController {
 
 	private final Logger logger = LoggerFactory.getLogger(getClass());
@@ -33,22 +36,26 @@ public class BatchController {
 	private final Job csvExportJob;
 	@Qualifier("pagingExportJob")
 	private final Job pagingExportJob;
+	@Qualifier("parallelExportJob")
+	private final Job parallelExportJob;
 
 	private final ExpenseMapper expenseMapper;
 	
 	private final JobLauncher jobLauncher;
-	
+	private final JobOperator jobOperator;
 
-	public BatchController(Job csvImportJob, Job csvExportJob, Job pagingExportJob, JobLauncher jobLauncher, ExpenseMapper expenseMapper) {
-		this.csvImportJob = csvImportJob;
-		this.csvExportJob = csvExportJob;
-		this.pagingExportJob = pagingExportJob;
-		this.expenseMapper = expenseMapper;
-		this.jobLauncher = jobLauncher;
-	}
+//	public BatchController(Job csvImportJob, Job csvExportJob, Job pagingExportJob, JobLauncher jobLauncher, ExpenseMapper expenseMapper, Job parallelExportJob, JobOperator jobOperator) {
+//		this.csvImportJob = csvImportJob;
+//		this.csvExportJob = csvExportJob;
+//		this.pagingExportJob = pagingExportJob;
+//		this.parallelExportJob = parallelExportJob;
+//		this.expenseMapper = expenseMapper;
+//		this.jobLauncher = jobLauncher;
+//		this.jobOperator = jobOperator;
+//	}
 
 
-	@GetMapping("/execute")
+	@GetMapping("/export")
 	public ResponseEntity<Map<String, String>> executeBatchJob() {
 		
 		Long maxId = expenseMapper.findMaxId();
@@ -80,6 +87,25 @@ public class BatchController {
 							"message", e.getMessage()));
 		}
 		
+	}
+	
+	@GetMapping("/export-parallel")
+	public ResponseEntity<String> executeparallelExportJob() {
+		try {
+			String outpuDir = "src/main/resources/csv/export/parallel";
+			
+			JobParameters jobParameters = new JobParametersBuilder()
+					.addLong("executionTime",  System.currentTimeMillis())
+					.addString("outputDir", outpuDir)
+					.toJobParameters();
+			JobExecution jobExecution = jobOperator.start(parallelExportJob, jobParameters);
+			
+			return ResponseEntity.ok().body("Parallel Export started: " + jobExecution.getId());
+			}catch (Exception e) {
+				logger.error("Paralel Export failed", e);
+				return ResponseEntity.internalServerError().body("Export failed: " + e.getMessage());
+				
+			}
 	}
 	
 //	@GetMapping("/export")

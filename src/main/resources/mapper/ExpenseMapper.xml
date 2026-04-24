@@ -190,6 +190,22 @@
   	ORDER BY id ASC
   
   </select>
+  <select id="findByIdRange" resultMap="expenseResultMap">
+  	SELECT 
+  	    id,
+  		applicant_id,
+  		title,
+  		amount,
+  		currency,
+  		status,
+  		submitted_at,
+  		created_at,
+  		updated_at,
+  		version
+  	FROM expenses
+  	WHERE id BETWEEN #{minId} AND #{maxId}
+  	ORDER BY id ASC
+  </select>
   
   
   </mapper>

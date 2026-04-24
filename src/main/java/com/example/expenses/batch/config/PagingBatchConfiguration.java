@@ -19,7 +19,6 @@ import org.springframework.batch.infrastructure.item.file.transform.DelimitedLin
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -36,7 +35,7 @@ public class PagingBatchConfiguration {
 	@Bean
 	@StepScope
 	MyBatisPagingItemReader<Expense> expensePagingReader(
-			@Value("#{jobParameters['pageSize'] ?: 1000}")Long pageSize,
+			@Value("#{jobParameters['pageSize'] ?: 10000}")Long pageSize,
 			@Value("#{jobParameters['maxId'] ?: 0}") Long maxId) {
 		
 		Map<String, Object> parameterValues = new HashMap<>();
@@ -78,14 +77,13 @@ public class PagingBatchConfiguration {
 			MyBatisPagingItemReader<Expense> expensePagingReader,
 			FlatFileItemWriter<Expense> expensePagingCsvWriter) {
 		return new StepBuilder("pagingExportStep", jobRepository)
-				.<Expense, Expense>chunk(100, transactionManager)
+				.<Expense, Expense>chunk(10000, transactionManager)
 				.reader(expensePagingReader)
 				.writer(expensePagingCsvWriter)
 				.build();
 	}
 	
 	@Bean
-	@Primary
     Job pagingExportJob(JobRepository jobRepository, Step pagingExportStep) {
 		return new JobBuilder("pagingExportJob", jobRepository)
 				.start(pagingExportStep)
