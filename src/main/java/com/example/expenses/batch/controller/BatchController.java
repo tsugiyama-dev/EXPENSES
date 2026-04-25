@@ -1,6 +1,7 @@
 package com.example.expenses.batch.controller;
 
 
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
@@ -11,9 +12,9 @@ import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.job.parameters.JobParametersBuilder;
-import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,10 +39,14 @@ public class BatchController {
 	private final Job pagingExportJob;
 	@Qualifier("parallelExportJob")
 	private final Job parallelExportJob;
+	@Qualifier("conditionalFlowJob")
+	private final Job conditionalFlowJob;
 
+	@Value("${file.input-dir}")
+	private String inputdir;
+	
 	private final ExpenseMapper expenseMapper;
 	
-	private final JobLauncher jobLauncher;
 	private final JobOperator jobOperator;
 
 //	public BatchController(Job csvImportJob, Job csvExportJob, Job pagingExportJob, JobLauncher jobLauncher, ExpenseMapper expenseMapper, Job parallelExportJob, JobOperator jobOperator) {
@@ -73,7 +78,7 @@ public class BatchController {
 			JobExecution jobExecution = null;
 		
 		try {
-			jobExecution = jobLauncher.run(pagingExportJob, param);
+			jobExecution = jobOperator.start(pagingExportJob, param);
 		
 			return ResponseEntity.accepted().body(Map.of(
 					"status", jobExecution.getStatus().toString(),
@@ -106,6 +111,29 @@ public class BatchController {
 				return ResponseEntity.internalServerError().body("Export failed: " + e.getMessage());
 				
 			}
+	}
+	
+	@GetMapping("/conditional-flow")
+	public ResponseEntity<String> executteConditionalFlowJob() {
+		try {
+			String inputDir = Path.of(inputdir).toAbsolutePath().normalize().toString();
+			
+			JobParameters jobParameters = new JobParametersBuilder()
+					.addLong("executionTime", System.currentTimeMillis())
+					.addString("inputDir", inputDir)
+					.toJobParameters();
+			
+			
+			System.out.println("入力ディレクトリのパス: " + Path.of(inputDir).toAbsolutePath().normalize());
+			JobExecution jobExecution = jobOperator.start(conditionalFlowJob, jobParameters);
+			
+			return ResponseEntity.ok().body("Conditional Flow Job started: " + jobExecution.getId());
+		}catch(Exception e) {
+			
+			logger.error("Conditional Flow Job failed", e);
+			return ResponseEntity.internalServerError().body("Job failed: " + e.getMessage());
+			
+		}
 	}
 	
 //	@GetMapping("/export")

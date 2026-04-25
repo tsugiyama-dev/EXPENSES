@@ -1,5 +1,10 @@
 package com.example.expenses.batch.config;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
@@ -7,9 +12,10 @@ import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.infrastructure.item.file.FlatFileItemReader;
 import org.springframework.batch.infrastructure.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import com.example.expenses.batch.dto.ExpenseCsvRow;
@@ -27,11 +33,25 @@ public class CsvImportBatchConfiguration {
 	private final ExpenseCsvItemWriter writer;
 	
 	@Bean
-	FlatFileItemReader<ExpenseCsvRow> expenseCsvReader() {
+	@StepScope
+	FlatFileItemReader<ExpenseCsvRow> expenseCsvReader(@Value("#{jobParameters['inputDir']}") String inputDir) {
+		
+		if(!Files.exists(Path.of(inputDir))) {
+			try {
+				Files.createDirectories(Path.of(inputDir));
+				
+				System.out.println("入力ディレクトリのパス: " + inputDir);
+				
+			}catch(IOException e) {
+				throw new RuntimeException("入力ディレクトリの作成に失敗: " + inputDir, e);
+			}
+			
+		}
 		
 		return new FlatFileItemReaderBuilder<ExpenseCsvRow>()
 				.name("expenseCsvReader")
-				.resource(new ClassPathResource("csv/sample.csv"))
+				.resource(new FileSystemResource(inputDir + "/sample.csv"))
+//				.resource(new ClassPathResource("csv/sample.csv"))
 				.linesToSkip(1) // ヘッダー行をスキップ
 				.delimited()
 				.names("applicantId", "title", "amount", "currency")
@@ -53,7 +73,7 @@ public class CsvImportBatchConfiguration {
 			PlatformTransactionManager transactionManager,
 			FlatFileItemReader<ExpenseCsvRow> expenseCsvReader) {
 		return new StepBuilder("csvImportStep", jobRepository)
-				.<ExpenseCsvRow, Expense>chunk(100, transactionManager)
+				.<ExpenseCsvRow, Expense>chunk(100)
 				.reader(expenseCsvReader)
 				.processor(processor)
 				.writer(writer)
