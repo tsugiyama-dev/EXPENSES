@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import jakarta.validation.Valid;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,8 +47,9 @@ public class ExpenseController {
 	}
 
 	@PostMapping("/{id}/submit")
-	public ResponseEntity<ExpenseResponse> submit(@PathVariable Long id) {
-		return ResponseEntity.ok(expenseService.submit(id));
+	public ResponseEntity<ExpenseResponse> submit(@PathVariable Long id,
+			@AuthenticationPrincipal LoginUser user) {
+		return ResponseEntity.ok(expenseService.submit(id,user.getUserId()));
 	}
 
 	@GetMapping

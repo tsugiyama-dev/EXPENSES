@@ -23,7 +23,7 @@ public class SecurityConfig {
 				.requestMatchers(HttpMethod.POST,"/expenses/*/approve", "/expenses/*/reject")
 				.hasRole("APPROVER")
 				.requestMatchers(
-						"/static/**",
+						"/js/**",
 						"/login",
 						"/health",
 						"/swagger-ui",

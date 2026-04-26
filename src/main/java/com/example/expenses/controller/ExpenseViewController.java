@@ -119,7 +119,7 @@ public class ExpenseViewController {
 	public String submit(
 			@PathVariable long expenseId,
 			@AuthenticationPrincipal LoginUser user) {
-		expenseService.submit(expenseId);
+		expenseService.submit(expenseId, user.getUserId());
 		
 		return "redirect:/expenses/list";
 	}
