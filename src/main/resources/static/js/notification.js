@@ -31,7 +31,7 @@ class NotificationManager {
 		);
 		
 		// 全体通知を購読
-		this.stompClient.subscribe('/topc/notifications',
+		this.stompClient.subscribe('/topic/notifications',
 			(message) => this.onBroadcastNotification(message)
 		);
 		
@@ -40,6 +40,12 @@ class NotificationManager {
 	
 	
 	onPersonalNotification(message) {
+		const notification = JSON.parse(message.body);
+		console.log('個人通知受信:', notification);
+		this.displayNotification(notification, 'personal');
+	}
+
+	onBroadcastNotification(message) {
 		const notification = JSON.parse(message.body);
 		console.log('全体通知受信:', notification);
 		this.displayNotification(notification, 'broadcast');
@@ -53,16 +59,15 @@ class NotificationManager {
 		const container = document.getElementById('notification-container');
 		
 		const notificationElement = document.createElement('div');
-		notificationElement.className = `notification notification-${notification.type.toLowerCase()}${type}`;
-		
+		notificationElement.className = `notification notification-${notification.type.toLowerCase()} ${type}`;
+
 		// アイコンを決定
 		let icon = '📢';
 		if(notification.type === 'EXPENSE_APPROVED') {
 			icon = '✅';
-			
-		} else if(notification === 'EXPENSE_REJECTED') {
+		} else if(notification.type === 'EXPENSE_REJECTED') {
 			icon = '✖';
-		}else if( notification === 'EXPENSE_SUBMITTED') {
+		} else if(notification.type === 'EXPENSE_SUBMITTED') {
 			icon = '📝';
 		}
 		
@@ -138,7 +143,7 @@ class NotificationManager {
 	/**
 	 * 切断
 	 */
-	disconnected() {
+	disconnect() {
 		if(this.stompClient !== null) {
 			this.stompClient.disconnect();
 			console.log('WebSocket切断');

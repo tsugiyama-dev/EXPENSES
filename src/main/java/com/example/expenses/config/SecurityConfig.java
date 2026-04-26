@@ -28,10 +28,12 @@ public class SecurityConfig {
 						"/health",
 						"/swagger-ui",
 						"/v3/api-docs/**",
-						"/register/**"
+						"/register/**",
+						"/ws/**"
 						).permitAll()
 				.anyRequest().authenticated()
 				)
+		.csrf(csrf -> csrf.ignoringRequestMatchers("/ws/**"))
 		.formLogin(
 				f -> f
 				.loginPage("/login")
