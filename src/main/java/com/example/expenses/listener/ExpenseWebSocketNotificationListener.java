@@ -5,19 +5,20 @@ import java.time.LocalDateTime;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-import com.example.expenses.controller.NotificationWebSocketController;
 import com.example.expenses.dto.NotificationMessage;
 import com.example.expenses.dto.NotificationMessage.NotificationType;
 import com.example.expenses.event.ExpenseApprovedEvent;
 import com.example.expenses.event.ExpenseRejectedEvent;
 import com.example.expenses.event.ExpenseSubmittedEvent;
+import com.example.expenses.websocket.RedisWebSocketPublisher;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 経費イベントをWebSocket通知へ変換するリスナー
- * - 提出：全ユーザー（承認者）へブロードキャスト
+ * 経費イベントを Redis 経由で WebSocket 通知へ変換するリスナー。
+ * Redis を挟むことで複数インスタンスでもすべてのクライアントに通知が届く。
+ * - 提出：全員へブロードキャスト
  * - 承認/却下：申請者個人へ送信
  */
 @Component
@@ -25,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ExpenseWebSocketNotificationListener {
 
-    private final NotificationWebSocketController wsController;
+    private final RedisWebSocketPublisher publisher;
 
     @EventListener
     public void handleSubmitted(ExpenseSubmittedEvent event) {
@@ -36,8 +37,8 @@ public class ExpenseWebSocketNotificationListener {
                 .timestamp(LocalDateTime.now())
                 .build();
 
-        log.debug("WebSocket broadcast: SUBMITTED expenseId={}", event.getExpenseId());
-        wsController.broadcastNotification(msg);
+        log.debug("Redis publish: SUBMITTED expenseId={}", event.getExpenseId());
+        publisher.broadcast(msg);
     }
 
     @EventListener
@@ -49,8 +50,8 @@ public class ExpenseWebSocketNotificationListener {
                 .timestamp(LocalDateTime.now())
                 .build();
 
-        log.debug("WebSocket personal: APPROVED expenseId={}, applicantId={}", event.getExpenseId(), event.getApplicantId());
-        wsController.sendNotificationToUser(event.getApplicantId(), msg);
+        log.debug("Redis publish: APPROVED expenseId={}, applicantId={}", event.getExpenseId(), event.getApplicantId());
+        publisher.sendToUser(event.getApplicantId(), msg);
     }
 
     @EventListener
@@ -62,7 +63,7 @@ public class ExpenseWebSocketNotificationListener {
                 .timestamp(LocalDateTime.now())
                 .build();
 
-        log.debug("WebSocket personal: REJECTED expenseId={}, applicantId={}", event.getExpenseId(), event.getApplicantId());
-        wsController.sendNotificationToUser(event.getApplicantId(), msg);
+        log.debug("Redis publish: REJECTED expenseId={}, applicantId={}", event.getExpenseId(), event.getApplicantId());
+        publisher.sendToUser(event.getApplicantId(), msg);
     }
 }
