@@ -21,7 +21,7 @@ public class NotificationWebSocketController {
 	@MessageMapping("/notify")
 	@SendTo("/topic/notifications")
 	public NotificationMessage sendNotification(NotificationMessage message) {
-		log.info("Notification recdeived* {}", message);
+		log.info("Notification received* {}", message);
 		return message;
 	}
 	

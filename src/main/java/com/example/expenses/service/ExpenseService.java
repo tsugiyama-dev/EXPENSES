@@ -1,6 +1,5 @@
 package com.example.expenses.service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -15,7 +14,6 @@ import com.example.expenses.controller.NotificationWebSocketController;
 import com.example.expenses.domain.Expense;
 import com.example.expenses.domain.User;
 import com.example.expenses.dto.ExpenseAuditLog;
-import com.example.expenses.dto.NotificationMessage;
 import com.example.expenses.dto.request.ExpenseCreateRequest;
 import com.example.expenses.dto.request.ExpenseSearchCriteria;
 import com.example.expenses.dto.request.ExpenseSearchCriteriaEntity;
@@ -183,19 +181,19 @@ public class ExpenseService {
 			throw new BusinessException("NOT_FOUND", "ユーザーが見つかりません");
 		}
 		
-		// WebSocket通知
-		NotificationMessage notification = NotificationMessage.builder()
-				.type(NotificationMessage.NotificationType.EXPENSE_SUBMITTED)
-				.expenseId(expenseId)
-				.applicantName(applicantUser.getDisplayName())
-				.title(current.getTitle())
-				.amount(current.getAmount().toString())
-				.message("新しい経費が申請されました")
-				.timestamp(LocalDateTime.now())
-				.build();
-		
-		// 全承認者にブロードキャスト
-		notificationController.sendNotification(notification);
+//		// WebSocket通知
+//		NotificationMessage notification = NotificationMessage.builder()
+//				.type(NotificationMessage.NotificationType.EXPENSE_SUBMITTED)
+//				.expenseId(expenseId)
+//				.applicantName(applicantUser.getDisplayName())
+//				.title(current.getTitle())
+//				.amount(current.getAmount().toString())
+//				.message("新しい経費が申請されました")
+//				.timestamp(LocalDateTime.now())
+//				.build();
+//		
+//		// 全承認者にブロードキャスト
+//		notificationController.sendNotification(notification);
 		
 		//6.結果を返す
 		Expense saved = expenseMapper.findById(expenseId);
@@ -241,18 +239,18 @@ public class ExpenseService {
 			throw new BusinessException("NOT_FOUND", "申請者が見つかりません: " + expense.getApplicantId());
 		}
 
-		// WebSocket通知
-		NotificationMessage notification = NotificationMessage.builder()
-				.type(NotificationMessage.NotificationType.EXPENSE_APPROVED)
-				.expenseId(expenseId)
-				.applicantName(applicantUser.getDisplayName())
-				.approverName(approver.getDisplayName())
-				.title(expense.getTitle())
-				.amount(expense.getAmount().toString())
-				.message("経費が承認されました")
-				.timestamp(LocalDateTime.now())
-				.build();
-		notificationController.sendNotificationToUser(expense.getApplicantId(), notification);
+//		// WebSocket通知
+//		NotificationMessage notification = NotificationMessage.builder()
+//				.type(NotificationMessage.NotificationType.EXPENSE_APPROVED)
+//				.expenseId(expenseId)
+//				.applicantName(applicantUser.getDisplayName())
+//				.approverName(approver.getDisplayName())
+//				.title(expense.getTitle())
+//				.amount(expense.getAmount().toString())
+//				.message("経費が承認されました")
+//				.timestamp(LocalDateTime.now())
+//				.build();
+//		notificationController.sendNotificationToUser(expense.getApplicantId(), notification);
 		
 		//監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createApprove(expenseId, approverId, traceId()));
@@ -313,18 +311,18 @@ public class ExpenseService {
 			throw new BusinessException("NOT_FOUND", "申請者が見つかりません: " + expense.getApplicantId());
 		}
 		
-		// WebSocket通知
-		NotificationMessage notification = NotificationMessage.builder()
-				.type(NotificationMessage.NotificationType.EXPENSE_APPROVED)
-				.expenseId(expenseId)
-				.applicantName(applicantUser.getDisplayName())
-				.approverName(approver.getDisplayName())
-				.title(expense.getTitle())
-				.amount(expense.getAmount().toString())
-				.message("経費が承認されました")
-				.timestamp(LocalDateTime.now())
-				.build();
-		notificationController.sendNotificationToUser(expense.getApplicantId(), notification);
+//		// WebSocket通知
+//		NotificationMessage notification = NotificationMessage.builder()
+//				.type(NotificationMessage.NotificationType.EXPENSE_APPROVED)
+//				.expenseId(expenseId)
+//				.applicantName(applicantUser.getDisplayName())
+//				.approverName(approver.getDisplayName())
+//				.title(expense.getTitle())
+//				.amount(expense.getAmount().toString())
+//				.message("経費が承認されました")
+//				.timestamp(LocalDateTime.now())
+//				.build();
+//		notificationController.sendNotificationToUser(expense.getApplicantId(), notification);
 		//監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createReject(expenseId, approverId, traceId, reason));
 		

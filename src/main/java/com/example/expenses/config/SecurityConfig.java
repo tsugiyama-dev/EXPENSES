@@ -28,7 +28,8 @@ public class SecurityConfig {
 						"/health",
 						"/swagger-ui",
 						"/v3/api-docs/**",
-						"/register/**"
+						"/register/**",
+						"/ws/**"
 						).permitAll()
 				.anyRequest().authenticated()
 				)
@@ -42,7 +43,8 @@ public class SecurityConfig {
 				logout -> logout 
 				.logoutSuccessUrl("/login")
 				.logoutUrl("/logout")) 
-//		.csrf(t -> t.disable())
+		.csrf(csrf -> csrf.ignoringRequestMatchers("/ws/**"))
+//		.csrf(csrf -> csrf.disable())
 		.httpBasic(Customizer.withDefaults());
 		
 		return http.build();
