@@ -13,6 +13,7 @@ import com.example.expenses.event.ExpenseRejectedEvent;
 import com.example.expenses.event.ExpenseSubmittedEvent;
 import com.example.expenses.exception.BusinessException;
 import com.example.expenses.repository.ExpenseMapper;
+import com.example.expenses.repository.UserMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,18 +25,22 @@ public class ExpenseWebSocketNotificationListener {
 
 	private final NotificationWebSocketController wsController;
 	private final ExpenseMapper expenseMapper;
+	private final UserMapper userMapper;
 	
 	@EventListener
 	public void handleSubmitted(ExpenseSubmittedEvent event) {
 		
 		var expense = expenseMapper.findById(event.getExpenseId());
 		if(expense == null) throw new BusinessException("経費が見つかりません：" + event.getExpenseId());
+
+		String email = userMapper.findEmailById(expense.getApplicantId());
+		
 		var msg = NotificationMessage.builder()
 				.type(NotificationType.EXPENSE_SUBMITTED)
 				.expenseId(event.getExpenseId())
 				.title(expense.getTitle())
 				.amount(expense.getAmount().toString())
-				.applicantName("申請者ID：" + String.valueOf(expense.getApplicantId())) // 一時的に申請者名ではなくID
+				.applicantName(email) 
  				.message("経費申請 #" + event.getExpenseId() + "が提出されました")
 				.timestamp(LocalDateTime.now())
 				.build();
@@ -50,12 +55,14 @@ public class ExpenseWebSocketNotificationListener {
 		var expense = expenseMapper.findById(event.getExpenseId());
 		if(expense == null) throw new BusinessException("経費が見つかりません：" + event.getExpenseId());
 		
+		String email = userMapper.findEmailById(expense.getApplicantId());
+		
 		var msg = NotificationMessage.builder()
 				.type(NotificationType.EXPENSE_APPROVED)
 				.expenseId(event.getExpenseId())
 				.title(expense.getTitle())
 				.amount(expense.getAmount().toString())
-				.applicantName("申請者ID：" + String.valueOf(expense.getApplicantId())) // 一時的に申請者名ではなくID
+				.applicantName(email)
 				.message("経費申請 #" + event.getExpenseId() + "が承認されました")
 				.timestamp(LocalDateTime.now())
 				.build();
@@ -70,12 +77,14 @@ public class ExpenseWebSocketNotificationListener {
 		var expense = expenseMapper.findById(event.getExpenseId());
 		if(expense == null) throw new BusinessException("経費が見つかりません：" + event.getExpenseId());
 		
+		String email = userMapper.findEmailById(expense.getApplicantId());
+		
 		var msg = NotificationMessage.builder()
 				.type(NotificationType.EXPENSE_REJECTED)
 				.expenseId(event.getExpenseId())
 				.title(expense.getTitle())
 				.amount(expense.getAmount().toString())
-				.applicantName("申請者ID：" + String.valueOf(expense.getApplicantId())) // 一時的に申請者名ではなくID
+				.applicantName(email)
 				.message("経費申請 #" + event.getExpenseId() + "が却下されました")
 				.timestamp(LocalDateTime.now())
 				.build();

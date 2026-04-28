@@ -26,7 +26,8 @@ class NotificationManager {
 		this.updateConnectionStatus(true);
 		
 		// 個人通知を購読
-		this.stompClient.subscribe(`/queue/${this.userId}/notifications`,
+		this.stompClient.subscribe(`/user/queue/${this.userId}/notifications`,
+//		this.stompClient.subscribe(`/queue/${this.userId}/notifications`,
 			(message) => this.onPersonalNotification(message)
 		);
 		
