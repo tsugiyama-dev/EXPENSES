@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.expenses.config.TraceIdFilter;
-import com.example.expenses.controller.NotificationWebSocketController;
 import com.example.expenses.domain.Expense;
 import com.example.expenses.domain.User;
 import com.example.expenses.dto.ExpenseAuditLog;
@@ -40,7 +39,6 @@ public class ExpenseService {
 	private final AuthenticationContext authenticationContext;
 	private final ApplicationEventPublisher eventPublisher;
 	private final UserMapper userMapper;
-	private final NotificationWebSocketController notificationController;
 	
 	private static final Set<String> ALLOWED_SORTS = Set.of("created_at", "updated_at", "submitted_at", "amount", "id");
 	
@@ -181,20 +179,6 @@ public class ExpenseService {
 			throw new BusinessException("NOT_FOUND", "ユーザーが見つかりません");
 		}
 		
-//		// WebSocket通知
-//		NotificationMessage notification = NotificationMessage.builder()
-//				.type(NotificationMessage.NotificationType.EXPENSE_SUBMITTED)
-//				.expenseId(expenseId)
-//				.applicantName(applicantUser.getDisplayName())
-//				.title(current.getTitle())
-//				.amount(current.getAmount().toString())
-//				.message("新しい経費が申請されました")
-//				.timestamp(LocalDateTime.now())
-//				.build();
-//		
-//		// 全承認者にブロードキャスト
-//		notificationController.sendNotification(notification);
-		
 		//6.結果を返す
 		Expense saved = expenseMapper.findById(expenseId);
 		return ExpenseResponse.toResponse(saved);
@@ -239,18 +223,6 @@ public class ExpenseService {
 			throw new BusinessException("NOT_FOUND", "申請者が見つかりません: " + expense.getApplicantId());
 		}
 
-//		// WebSocket通知
-//		NotificationMessage notification = NotificationMessage.builder()
-//				.type(NotificationMessage.NotificationType.EXPENSE_APPROVED)
-//				.expenseId(expenseId)
-//				.applicantName(applicantUser.getDisplayName())
-//				.approverName(approver.getDisplayName())
-//				.title(expense.getTitle())
-//				.amount(expense.getAmount().toString())
-//				.message("経費が承認されました")
-//				.timestamp(LocalDateTime.now())
-//				.build();
-//		notificationController.sendNotificationToUser(expense.getApplicantId(), notification);
 		
 		//監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createApprove(expenseId, approverId, traceId()));
@@ -306,23 +278,7 @@ public class ExpenseService {
 		if(approver == null) {
 			throw new BusinessException("NOT_FOUND", "承認者が見つかりません: " + approverId);
 		}
-		User applicantUser = userMapper.findById(expense.getApplicantId());
-		if(applicantUser == null) {
-			throw new BusinessException("NOT_FOUND", "申請者が見つかりません: " + expense.getApplicantId());
-		}
 		
-//		// WebSocket通知
-//		NotificationMessage notification = NotificationMessage.builder()
-//				.type(NotificationMessage.NotificationType.EXPENSE_APPROVED)
-//				.expenseId(expenseId)
-//				.applicantName(applicantUser.getDisplayName())
-//				.approverName(approver.getDisplayName())
-//				.title(expense.getTitle())
-//				.amount(expense.getAmount().toString())
-//				.message("経費が承認されました")
-//				.timestamp(LocalDateTime.now())
-//				.build();
-//		notificationController.sendNotificationToUser(expense.getApplicantId(), notification);
 		//監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createReject(expenseId, approverId, traceId, reason));
 		

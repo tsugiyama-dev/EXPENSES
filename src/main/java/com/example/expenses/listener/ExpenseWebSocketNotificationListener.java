@@ -5,7 +5,6 @@ import java.time.LocalDateTime;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-import com.example.expenses.controller.NotificationWebSocketController;
 import com.example.expenses.dto.NotificationMessage;
 import com.example.expenses.dto.NotificationMessage.NotificationType;
 import com.example.expenses.event.ExpenseApprovedEvent;
@@ -13,16 +12,23 @@ import com.example.expenses.event.ExpenseRejectedEvent;
 import com.example.expenses.event.ExpenseSubmittedEvent;
 import com.example.expenses.exception.BusinessException;
 import com.example.expenses.repository.ExpenseMapper;
+import com.example.expenses.websocket.RedisWebSocketPublisher;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Redis を中継して複数インスタンスに通知が届く
+ * - 提出: 全員へブロードキャスト
+ * - 承認/却下: 申請者個人へ送信
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class ExpenseWebSocketNotificationListener {
 
-	private final NotificationWebSocketController wsController;
+//	private final NotificationWebSocketController wsController; //複数インスタンス対応のためコメントアウト
+	private final RedisWebSocketPublisher publisher;
 	private final ExpenseMapper expenseMapper;
 	
 	@EventListener
@@ -41,7 +47,8 @@ public class ExpenseWebSocketNotificationListener {
 				.build();
 		
 		log.debug("WebSocket broadcast: SUBMITTED expenseId={}", event.getExpenseId());
-		wsController.broadcastNotification(msg);
+//		wsController.broadcastNotification(msg);
+		publisher.broadcast(msg);
 	}
 	
 	@EventListener
@@ -61,7 +68,8 @@ public class ExpenseWebSocketNotificationListener {
 				.build();
 		
 		log.debug("WebSocket personal: APPROVED expenseId={}, applicantId={}", event.getExpenseId(), event.getApplicantId());
-		wsController.sendNotificationToUser(event.getApplicantId(), msg);
+//		wsController.sendNotificationToUser(event.getApplicantId(), msg);
+		publisher.sendToUser(event.getApplicantId(), msg);
 	}
 	
 	@EventListener
@@ -81,6 +89,7 @@ public class ExpenseWebSocketNotificationListener {
 				.build();
 		
 		log.debug("WebSocket personal: REJECTED expenseId={}, applicantId={}", event.getExpenseId(), event.getApplicantId());
-		wsController.sendNotificationToUser(event.getApplicantId(), msg);
+//		wsController.sendNotificationToUser(event.getApplicantId(), msg);
+		publisher.sendToUser(event.getApplicantId(), msg);
 	}
 }
