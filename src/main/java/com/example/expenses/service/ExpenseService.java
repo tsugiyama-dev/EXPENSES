@@ -174,10 +174,12 @@ public class ExpenseService {
 						traceId()
 						));
 		
+
 		User applicantUser = userMapper.findById(applicantId);
 		if(applicantUser == null) {
 			throw new BusinessException("NOT_FOUND", "ユーザーが見つかりません");
 		}
+
 		
 		//6.結果を返す
 		Expense saved = expenseMapper.findById(expenseId);
@@ -218,10 +220,12 @@ public class ExpenseService {
 		if(approver == null) {
 			throw new BusinessException("NOT_FOUND", "承認者が見つかりません: " + approverId);
 		}
+
 		User applicantUser = userMapper.findById(expense.getApplicantId());
 		if(applicantUser == null) {
 			throw new BusinessException("NOT_FOUND", "申請者が見つかりません: " + expense.getApplicantId());
 		}
+
 
 		
 		//監査ログ登録
@@ -235,8 +239,6 @@ public class ExpenseService {
 						expense.getApplicantId(),
 						traceId()
 						));
-
-		
 
 		//更新後の経費を取得して返す
 		var saved = expenseMapper.findById(expenseId);
@@ -278,7 +280,7 @@ public class ExpenseService {
 		if(approver == null) {
 			throw new BusinessException("NOT_FOUND", "承認者が見つかりません: " + approverId);
 		}
-		
+
 		//監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createReject(expenseId, approverId, traceId, reason));
 		
