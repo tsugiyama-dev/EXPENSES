@@ -1,5 +1,6 @@
 package com.example.expenses.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -10,8 +11,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.expenses.config.TraceIdFilter;
+import com.example.expenses.controller.NotificationWebSocketController;
 import com.example.expenses.domain.Expense;
+import com.example.expenses.domain.User;
 import com.example.expenses.dto.ExpenseAuditLog;
+import com.example.expenses.dto.NotificationMessage;
 import com.example.expenses.dto.request.ExpenseCreateRequest;
 import com.example.expenses.dto.request.ExpenseSearchCriteria;
 import com.example.expenses.dto.request.ExpenseSearchCriteriaEntity;
@@ -23,6 +27,7 @@ import com.example.expenses.event.ExpenseSubmittedEvent;
 import com.example.expenses.exception.BusinessException;
 import com.example.expenses.repository.ExpenseAuditLogMapper;
 import com.example.expenses.repository.ExpenseMapper;
+import com.example.expenses.repository.UserMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +41,8 @@ public class ExpenseService {
 	private final ExpenseAuditLogMapper auditLogMapper;
 	private final AuthenticationContext authenticationContext;
 	private final ApplicationEventPublisher eventPublisher;
+	private final UserMapper userMapper;
+	private final NotificationWebSocketController notificationController;
 	
 	private static final Set<String> ALLOWED_SORTS = Set.of("created_at", "updated_at", "submitted_at", "amount", "id");
 	
@@ -139,9 +146,8 @@ public class ExpenseService {
 	 * 経費提出
 	 */
 	@Transactional
-	public ExpenseResponse submit(Long expenseId) {
+	public ExpenseResponse submit(Long expenseId, Long applicantId) {
 		
-		Long userId = authenticationContext.getCurrentUserId();
 		
 		//経費申請の取得
 		Expense current =expenseMapper.findById(expenseId);
@@ -149,7 +155,7 @@ public class ExpenseService {
 			throw new NoSuchElementException("Expense not found: " + expenseId);
 		}
 		
-		if(!current.canBeSubmittedBy(userId)) {
+		if(!current.canBeSubmittedBy(applicantId)) {
 			throw new BusinessException("INVALID_STATUS_TRANSITION", "ステータスもしくは本人ではないため提出できません");
 		}
 		
@@ -160,16 +166,36 @@ public class ExpenseService {
 			throw new BusinessException("INVALID_STATUS_TRANSITION",
 					"下書き以外提出できません");
 		}
+		
 		//監査ログ登録
-		auditLogMapper.insert(ExpenseAuditLog.createDraft(expenseId, userId, traceId()));
+		auditLogMapper.insert(ExpenseAuditLog.createDraft(expenseId, applicantId, traceId()));
 		
 		//イベント発行
 		eventPublisher.publishEvent(
 				new ExpenseSubmittedEvent(
 						expenseId,
-						userId,
+						applicantId,
 						traceId()
 						));
+		
+		User applicantUser = userMapper.findById(applicantId);
+		if(applicantUser == null) {
+			throw new BusinessException("NOT_FOUND", "ユーザーが見つかりません");
+		}
+		
+		// WebSocket通知
+		NotificationMessage notification = NotificationMessage.builder()
+				.type(NotificationMessage.NotificationType.EXPENSE_SUBMITTED)
+				.expenseId(expenseId)
+				.applicantName(applicantUser.getDisplayName())
+				.title(current.getTitle())
+				.amount(current.getAmount().toString())
+				.message("新しい経費が申請されました")
+				.timestamp(LocalDateTime.now())
+				.build();
+		
+		// 全承認者にブロードキャスト
+		notificationController.sendNotification(notification);
 		
 		//6.結果を返す
 		Expense saved = expenseMapper.findById(expenseId);
@@ -180,9 +206,9 @@ public class ExpenseService {
 	 * 経費承認
 	 */
 	@Transactional
-	public ExpenseResponse approve(long expenseId, int version, Long actorId) {
+	public ExpenseResponse approve(long expenseId, int version, Long approverId) {
 		
-		Long currentUserId = authenticationContext.getCurrentUserId();
+
 		//経費取得
 		Expense expense = expenseMapper.findById(expenseId);
 		
@@ -204,14 +230,38 @@ public class ExpenseService {
 		if(updated == 0) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId());
 		}
+		
+		// WebSocket 通知送信
+		User approver = userMapper.findById(approverId);
+		if(approver == null) {
+			throw new BusinessException("NOT_FOUND", "承認者が見つかりません: " + approverId);
+		}
+		User applicantUser = userMapper.findById(expense.getApplicantId());
+		if(applicantUser == null) {
+			throw new BusinessException("NOT_FOUND", "申請者が見つかりません: " + expense.getApplicantId());
+		}
+
+		// WebSocket通知
+		NotificationMessage notification = NotificationMessage.builder()
+				.type(NotificationMessage.NotificationType.EXPENSE_APPROVED)
+				.expenseId(expenseId)
+				.applicantName(applicantUser.getDisplayName())
+				.approverName(approver.getDisplayName())
+				.title(expense.getTitle())
+				.amount(expense.getAmount().toString())
+				.message("経費が承認されました")
+				.timestamp(LocalDateTime.now())
+				.build();
+		notificationController.sendNotificationToUser(expense.getApplicantId(), notification);
+		
 		//監査ログ登録
-		auditLogMapper.insert(ExpenseAuditLog.createApprove(expenseId, actorId, traceId()));
+		auditLogMapper.insert(ExpenseAuditLog.createApprove(expenseId, approverId, traceId()));
 		
 		//イベントを発行
 		eventPublisher.publishEvent(
 				new ExpenseApprovedEvent(
 						expenseId,
-						currentUserId,
+						approverId,
 						expense.getApplicantId(),
 						traceId()
 						));
@@ -229,10 +279,9 @@ public class ExpenseService {
 	 * 経費却下
 	 */
 	@Transactional
-	public ExpenseResponse reject(long expenseId, String reason, int version, Long actorId) {
+	public ExpenseResponse reject(long expenseId, String reason, int version, Long approverId) {
 		
 		String traceId = traceId();
-		Long userId = authenticationContext.getCurrentUserId();
 		//経費取得
 		Expense expense = expenseMapper.findById(expenseId);	
 		//存在確認
@@ -254,14 +303,36 @@ public class ExpenseService {
 		if(updated == 0) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId);
 		}
+		
+		User approver = userMapper.findById(approverId);
+		if(approver == null) {
+			throw new BusinessException("NOT_FOUND", "承認者が見つかりません: " + approverId);
+		}
+		User applicantUser = userMapper.findById(expense.getApplicantId());
+		if(applicantUser == null) {
+			throw new BusinessException("NOT_FOUND", "申請者が見つかりません: " + expense.getApplicantId());
+		}
+		
+		// WebSocket通知
+		NotificationMessage notification = NotificationMessage.builder()
+				.type(NotificationMessage.NotificationType.EXPENSE_APPROVED)
+				.expenseId(expenseId)
+				.applicantName(applicantUser.getDisplayName())
+				.approverName(approver.getDisplayName())
+				.title(expense.getTitle())
+				.amount(expense.getAmount().toString())
+				.message("経費が承認されました")
+				.timestamp(LocalDateTime.now())
+				.build();
+		notificationController.sendNotificationToUser(expense.getApplicantId(), notification);
 		//監査ログ登録
-		auditLogMapper.insert(ExpenseAuditLog.createReject(expenseId, actorId, traceId, reason));
+		auditLogMapper.insert(ExpenseAuditLog.createReject(expenseId, approverId, traceId, reason));
 		
 		//イベント発行
 		eventPublisher.publishEvent(
 				new ExpenseRejectedEvent(
 						expenseId,
-						userId,
+						approverId,
 						traceId,
 						expense.getApplicantId(),
 						reason
@@ -344,5 +415,7 @@ public class ExpenseService {
 				.boxed()
 				.toList();
 	}
+	
+	
 	
 }

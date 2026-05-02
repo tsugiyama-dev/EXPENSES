@@ -23,15 +23,17 @@ public class SecurityConfig {
 				.requestMatchers(HttpMethod.POST,"/expenses/*/approve", "/expenses/*/reject")
 				.hasRole("APPROVER")
 				.requestMatchers(
-						"/static/**",
+						"/js/**",
 						"/login",
 						"/health",
 						"/swagger-ui",
 						"/v3/api-docs/**",
-						"/register/**"
+						"/register/**",
+						"/ws/**"
 						).permitAll()
 				.anyRequest().authenticated()
 				)
+		.csrf(csrf -> csrf.ignoringRequestMatchers("/ws/**"))
 		.formLogin(
 				f -> f
 				.loginPage("/login")

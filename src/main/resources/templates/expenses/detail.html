@@ -376,6 +376,40 @@
 				padding: 1rem;
 			}
 		}
+
+		/* WebSocket通知トースト */
+		#notification-container {
+			position: fixed;
+			top: 76px;
+			right: 20px;
+			z-index: 9999;
+			width: 360px;
+		}
+		.notification {
+			margin-bottom: 10px;
+			padding: 12px 15px;
+			border-radius: 8px;
+			box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+			animation: wsSlideIn 0.3s ease-out;
+			transition: opacity 0.3s;
+		}
+		@keyframes wsSlideIn {
+			from { transform: translateX(110%); opacity: 0; }
+			to   { transform: translateX(0);    opacity: 1; }
+		}
+		.notification-expense_submitted { background: #cfe2ff; border-left: 4px solid #0d6efd; }
+		.notification-expense_approved  { background: #d1e7dd; border-left: 4px solid #198754; }
+		.notification-expense_rejected  { background: #f8d7da; border-left: 4px solid #dc3545; }
+		.notification-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+		.notification-icon   { font-size: 20px; margin-right: 8px; }
+		.notification-title  { font-weight: bold; flex-grow: 1; font-size: 0.9rem; }
+		.notification-close  { background: none; border: none; font-size: 20px; cursor: pointer; color: #666; line-height: 1; }
+		.notification-body p { margin: 3px 0; font-size: 0.85rem; }
+		.notification-time   { font-size: 11px; color: #666; margin-top: 6px; }
+		.personal { outline: 2px solid #ffc107; }
+		#connection-status { font-size: 0.72rem; padding: 3px 8px; border-radius: 9999px; font-weight: 600; }
+		#connection-status.connected    { background: #d1fae5; color: #065f46; }
+		#connection-status.disconnected { background: rgba(255,255,255,0.2); color: #fff; }
 	</style>
 </head>
 <body>
@@ -387,6 +421,7 @@
 				経費管理システム
 			</a>
 			<div class="d-flex align-items-center gap-3">
+				<span id="connection-status" class="disconnected">🔴 WS</span>
 				<span class="text-white">
 					<i class="fas fa-user-circle"></i>
 					<strong th:text="${username}"></strong>
@@ -403,6 +438,10 @@
 			</div>
 		</div>
 	</nav>
+
+	<!-- WebSocket：ログインユーザーIDと通知トーストコンテナ -->
+	<div id="current-user-id" th:attr="data-user-id=${actorId}" style="display:none;"></div>
+	<div id="notification-container"></div>
 
 	<div class="container-fluid px-4">
 		<!-- 検索フォーム -->
@@ -784,5 +823,10 @@
 			});
 		});
 	</script>
+
+	<!-- WebSocket クライアントライブラリ -->
+	<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+	<script th:src="@{/js/notification.js}"></script>
 </body>
 </html>
