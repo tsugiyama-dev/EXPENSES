@@ -1,12 +1,62 @@
 
 
 services:
-  mailhog:
-   image: mailhog/mailhog:latest
-   ports:
-      - "1025:1025"
-      - "8025:8025"
+  app1:
+    build: .
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      mysql:
+       condition: service_healthy
+      redis:
+       condition: service_started
+      mailhog:
+        condition: service_started
+    ports:  
+      - "8080:8080" #ports: "ホスト:コンテナ"
+  
+  app2:
+    build: .
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      mysql:
+       condition: service_healthy
+      redis:
+       condition: service_started
+      mailhog:
+        condition: service_started
+    ports: 
+      - "8081:8080" #ports: "ホスト:コンテナ"
+       
+  mysql:
+      image: mysql:8
+      environment:
+       MYSQL_DATABASE: newschema
+       MYSQL_USER: app
+       MYSQL_PASSWORD: AppStrongPass_1234!
+       MYSQL_ROOT_PASSWORD: root
+      ports:
+        - "3307:3306" #ports: "ホスト:コンテナ"
+      volumes:
+        - mysql-data:/var/lib/mysql
+      healthcheck:
+        test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot --silent"]
+        interval: 5s #5秒ごとに確認
+        timeout: 3s #3秒待機して応答がなかったら失敗
+        retries: 30 #30回リトライ
+        start_period: 20s #最初の20秒間は失敗をカウントしない
+      
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "6379:6379" #ports: "ホスト:コンテナ"
+
+  mailhog:
+   image: mailhog/mailhog:latest
+   ports:
+      - "1025:1025" #ports: "ホスト:コンテナ"
+      - "8025:8025" #ports: "ホスト:コンテナ"
+      
+volumes:
+ mysql-data:

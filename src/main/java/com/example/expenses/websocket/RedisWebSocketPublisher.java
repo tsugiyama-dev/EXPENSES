@@ -33,4 +33,7 @@ public class RedisWebSocketPublisher {
 		log.debug("Redis publish: destination={}, expenseId={}", destination, message.getExpenseId());
 		redisTemplate.convertAndSend(CHANNEL, wrapper);
 	}
+
+		
+
 }

@@ -216,15 +216,15 @@ public class ExpenseService {
 		}
 		
 		// WebSocket 通知送信
-		User approver = userMapper.findById(approverId);
-		if(approver == null) {
-			throw new BusinessException("NOT_FOUND", "承認者が見つかりません: " + approverId);
-		}
-
-		User applicantUser = userMapper.findById(expense.getApplicantId());
-		if(applicantUser == null) {
-			throw new BusinessException("NOT_FOUND", "申請者が見つかりません: " + expense.getApplicantId());
-		}
+//		User approver = userMapper.findById(approverId);
+//		if(approver == null) {
+//			throw new BusinessException("NOT_FOUND", "承認者が見つかりません: " + approverId);
+//		}
+//
+//		User applicantUser = userMapper.findById(expense.getApplicantId());
+//		if(applicantUser == null) {
+//			throw new BusinessException("NOT_FOUND", "申請者が見つかりません: " + expense.getApplicantId());
+//		}
 
 
 		

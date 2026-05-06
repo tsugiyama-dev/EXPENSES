@@ -17,7 +17,14 @@ public class RedisWebSocketSubscriber {
 		log.debug("Redis subscribe: destination= {}, expenseId= {}",
 				  message.getDestination(),
 				  message.getPayload().getExpenseId());
-		messagingTemplate.convertAndSend(message.getDestination(), message.getPayload());
+		
+		if(message.getDestination().startsWith("/topic")) {			
+			messagingTemplate.convertAndSend(message.getDestination(), message.getPayload());
+		}else {
+			// 宛先が｛/queue｝の場合
+			messagingTemplate.convertAndSendToUser(message.getPayload().getApplicantName(),message.getDestination(), message.getPayload());
+			
+		}
 	}
 	
 }
