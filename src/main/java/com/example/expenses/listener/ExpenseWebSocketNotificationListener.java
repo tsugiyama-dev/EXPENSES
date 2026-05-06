@@ -2,6 +2,7 @@ package com.example.expenses.listener;
 
 import java.time.LocalDateTime;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
  * - 承認/却下: 申請者個人へ送信
  */
 @Component
+@ConditionalOnProperty(name = "app.events.direct-listeners.enabled", havingValue = "true")
 @RequiredArgsConstructor
 @Slf4j
 public class ExpenseWebSocketNotificationListener {

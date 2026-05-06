@@ -1,7 +1,6 @@
 package com.example.expenses.kafka;
 
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.*;
-
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import lombok.extern.slf4j.Slf4j;
@@ -10,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ExpenseKafkaConsumer {
 
-	@KafkaListener(topics = ExpenseTopics.EXPENSE_EVENTS, groupId = "expenses-app")
+	@KafkaListener(topics = ExpenseTopics.EXPENSE_EVENT, groupId = "expenses-app")
 	public void consume(ExpenseEventMessage message) {
 		log.info("Kafka consume: type={}, expenseId={}, actorId={}",
 				message.getEventType(), message.getExpenseId(),message.getActorId());

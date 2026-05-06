@@ -4,6 +4,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import com.example.expenses.event.ExpenseApprovedEvent;
+import com.example.expenses.event.ExpenseRejectedEvent;
 import com.example.expenses.event.ExpenseSubmittedEvent;
 import com.example.expenses.kafka.ExpenseEventMessage.EventType;
 
@@ -32,8 +33,8 @@ public class ExpenseKafkaBridgeListener {
 	
 	@EventListener
 	public void onApproved(ExpenseApprovedEvent event) {
-		var msg = new EpenseEventMessage(EventType.APPROVED,
-				event.getExpeseId(),
+		var msg = new ExpenseEventMessage(EventType.APPROVED,
+				event.getExpenseId(),
 				event.getApplicantId(),
 				null);
 		log.debug("Bridge => Kafka APPROVED expenseId={}",
@@ -43,7 +44,7 @@ public class ExpenseKafkaBridgeListener {
 	
 	@EventListener
 	public void onRejected(ExpenseRejectedEvent event) {
-	}var msg = new ExpenseEventMessage(EventType.REJECTED,
+	var msg = new ExpenseEventMessage(EventType.REJECTED,
 			event.getExpenseId(),
 			event.getApplicantId(),
 			event.getReason());

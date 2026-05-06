@@ -1,5 +1,6 @@
 package com.example.expenses.listener;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
  * -経費イベントを監視して分析処理を実行する
  */
 @Component
+@ConditionalOnProperty(name = "app.events.direct-listeners.enabled", havingValue = "true")
 @RequiredArgsConstructor
 @Slf4j
 public class ExpenseAnalyticsListener {

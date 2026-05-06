@@ -17,11 +17,11 @@ import lombok.NoArgsConstructor;
 public class NotificationMessage {
 
 	public enum NotificationType {
-		EXPENSE_SUBMITTED, //経費申請
-		EXPENSE_APPROVED, //承認
-		EXPENSE_REJECTED // 却下
+		EXPENSE_SUBMITTED,
+		EXPENSE_APPROVED,
+		EXPENSE_REJECTED
 	}
-	
+
 	private NotificationType type;
 	private Long expenseId;
 	private String applicantName;
