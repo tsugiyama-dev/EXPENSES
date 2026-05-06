@@ -10,13 +10,15 @@ import lombok.NoArgsConstructor;
 public class ExpenseEventMessage {
 
 	public enum EventType {
-		
-		SUBMITTED, APPROVED, REJECTED
+		SUBMITTED,
+		APPROVED,
+		REJECTED
 	}
-	
+
 	private EventType eventType;
 	private Long expenseId;
 	private Long actorId;
+	private Long applicantId;
 	private String reason;
-	
+	private String traceId;
 }

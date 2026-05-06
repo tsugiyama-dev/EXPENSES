@@ -9,35 +9,29 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ExpenseKafkaConsumer {
 
-	@KafkaListener(topics = ExpenseTopics.EXPENSE_EVENT, groupId = "expenses-app")
+	@KafkaListener(topics = ExpenseTopics.EXPENSE_EVENT, groupId = "expenses-audit-log")
 	public void consume(ExpenseEventMessage message) {
-		log.info("Kafka consume: type={}, expenseId={}, actorId={}",
-				message.getEventType(), message.getExpenseId(),message.getActorId());
-		
-		
-		switch(message.getEventType()) {
+		log.info("Kafka audit event: type={}, expenseId={}, actorId={}, applicantId={}",
+				message.getEventType(), message.getExpenseId(), message.getActorId(), message.getApplicantId());
+
+		switch (message.getEventType()) {
 		case SUBMITTED -> handleSubmitted(message);
 		case APPROVED -> handleApproved(message);
 		case REJECTED -> handleRejected(message);
 		}
 	}
-	
+
 	private void handleSubmitted(ExpenseEventMessage message) {
-		log.info("[[Kafka] 経費申請 #{}が提出されました",message.getExpenseId());
-		
-		// TODO メール送信WebSocket通知などを移植
+		log.info("[Kafka audit] expense #{} was submitted", message.getExpenseId());
 	}
-	
+
 	private void handleApproved(ExpenseEventMessage message) {
-		log.info("[Kafka] 経費申請 #{} が承認されました（申請者ID: {})",
-				message.getExpenseId(), message.getActorId());
-		// todo 申請者へメール送信
+		log.info("[Kafka audit] expense #{} was approved by actorId={} for applicantId={}",
+				message.getExpenseId(), message.getActorId(), message.getApplicantId());
 	}
-	
+
 	private void handleRejected(ExpenseEventMessage message) {
-		log.info("[Kafka] 経費申請 #{} が却下されました: {} (申請者ID:{})",
-				message.getExpenseId(), message.getReason(), message.getActorId());
-		
-		// todo 個々にメール送信WebSocket通知を移植する
+		log.info("[Kafka audit] expense #{} was rejected by actorId={}. reason={}, applicantId={}",
+				message.getExpenseId(), message.getActorId(), message.getReason(), message.getApplicantId());
 	}
 }
