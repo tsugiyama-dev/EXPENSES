@@ -11,7 +11,6 @@ import com.example.expenses.dto.NotificationMessage.NotificationType;
 import com.example.expenses.event.ExpenseApprovedEvent;
 import com.example.expenses.event.ExpenseRejectedEvent;
 import com.example.expenses.event.ExpenseSubmittedEvent;
-import com.example.expenses.exception.BusinessException;
 import com.example.expenses.repository.ExpenseMapper;
 import com.example.expenses.repository.UserMapper;
 import com.example.expenses.websocket.RedisWebSocketPublisher;
@@ -38,12 +37,11 @@ public class ExpenseWebSocketNotificationListener {
 	public void handleSubmitted(ExpenseSubmittedEvent event) {
 		
 		var expense = expenseMapper.findById(event.getExpenseId());
-		try {
-			if(expense == null) throw new BusinessException("経費が見つかりません：" + event.getExpenseId());
 		
-		}catch (Exception e) {
-			log.warn(e.getMessage());
-		}
+	    if(expense == null) {
+	    		log.warn("経費が見つかりません：{}", event.getExpenseId());
+	    		return;
+	    }		
 
 		String email = userMapper.findEmailById(expense.getApplicantId());
 		
@@ -58,7 +56,6 @@ public class ExpenseWebSocketNotificationListener {
 				.build();
 		
 		log.debug("WebSocket broadcast: SUBMITTED expenseId={}", event.getExpenseId());
-//		wsController.broadcastNotification(msg);
 		publisher.broadcast(msg);
 	}
 	
@@ -66,14 +63,11 @@ public class ExpenseWebSocketNotificationListener {
 	public void handleApproved(ExpenseApprovedEvent event) {
 		
 		var expense = expenseMapper.findById(event.getExpenseId());
-		try {
-			if(expense == null) throw new BusinessException("経費が見つかりません：" + event.getExpenseId());
-		
-		}catch (Exception e) {
-			log.warn(e.getMessage());
-			return;
-		}
-		
+			if(expense == null) {
+                log.warn("経費が見つかりません：" + event.getExpenseId());
+				return;
+			}
+				
 		String email = userMapper.findEmailById(expense.getApplicantId());
 		
 		var msg = NotificationMessage.builder()
@@ -93,12 +87,10 @@ public class ExpenseWebSocketNotificationListener {
 	@EventListener
 	public void handleRejected(ExpenseRejectedEvent event) {
         var expense = expenseMapper.findById(event.getExpenseId());
-        
-		try {
-			if(expense == null) throw new BusinessException("経費が見つかりません：" + event.getExpenseId());
-		}catch (Exception e) {
-			log.warn(e.getMessage());
-			return;
+       
+        if(expense == null) {
+        	log.warn("経費が見つかりません：" + event.getExpenseId());
+        	return;
 		}
 		
 		String email = userMapper.findEmailById(expense.getApplicantId());
