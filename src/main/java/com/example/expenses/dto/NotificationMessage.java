@@ -24,7 +24,7 @@ public class NotificationMessage {
 
 	private NotificationType type;
 	private Long expenseId;
-	private String applicantName;
+	private String applicantEmail;
 	private String approverName;
 	private String title;
 	private String amount;

@@ -102,7 +102,7 @@ public class ExpenseKafkaNotificationConsumer {
 				.expenseId(expense.getId())
 				.title(expense.getTitle())
 				.amount(expense.getAmount().toString())
-				.applicantName(applicantEmail)
+				.applicantEmail(applicantEmail)
 				.message(text)
 				.timestamp(LocalDateTime.now())
 				.build();

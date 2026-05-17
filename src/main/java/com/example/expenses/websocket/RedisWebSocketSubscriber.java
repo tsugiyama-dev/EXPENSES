@@ -22,7 +22,7 @@ public class RedisWebSocketSubscriber {
 			messagingTemplate.convertAndSend(message.getDestination(), message.getPayload());
 		}else {
 			// 宛先が｛/queue｝の場合
-			messagingTemplate.convertAndSendToUser(message.getPayload().getApplicantName(),message.getDestination(), message.getPayload());
+			messagingTemplate.convertAndSendToUser(message.getPayload().getApplicantEmail(),message.getDestination(), message.getPayload());
 			
 		}
 	}
