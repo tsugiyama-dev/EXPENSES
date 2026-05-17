@@ -18,6 +18,7 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import com.example.expenses.domain.Expense;
 import com.example.expenses.dto.ExpenseAuditLog;
 import com.example.expenses.dto.request.ExpenseCreateRequest;
+import com.example.expenses.metrics.ExpenseMetrics;
 import com.example.expenses.repository.ExpenseAuditLogMapper;
 import com.example.expenses.repository.ExpenseMapper;
 
@@ -26,13 +27,16 @@ public class ExpenseServiceExceptionTest {
 
 	@Mock
 	private ExpenseMapper expenseMapper;
-	
+
 	@Mock
 	private ExpenseAuditLogMapper auditLogMapper;
-	
+
 	@Mock
 	private AuthenticationContext authenticationContext;
-	
+
+	@Mock
+	private ExpenseMetrics expenseMetrics;
+
 	@InjectMocks
 	private ExpenseService expenseService;
 	

@@ -20,14 +20,16 @@ import com.example.expenses.exception.BusinessException;
 import com.example.expenses.kafka.ExpenseEventMessage;
 import com.example.expenses.kafka.ExpenseEventMessage.EventType;
 import com.example.expenses.kafka.ExpenseKafkaProducer;
+import com.example.expenses.metrics.ExpenseMetrics;
 import com.example.expenses.repository.ExpenseAuditLogMapper;
 import com.example.expenses.repository.ExpenseMapper;
 
+import io.micrometer.core.annotation.Timed;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
-@RequiredArgsConstructor//Lombokが全フィールドのコンストラクタを自動生成
+@RequiredArgsConstructor
 @Slf4j
 public class ExpenseService {
 
@@ -35,39 +37,30 @@ public class ExpenseService {
 	private final ExpenseAuditLogMapper auditLogMapper;
 	private final AuthenticationContext authenticationContext;
 	private final ExpenseKafkaProducer expenseKafkaProducer;
-	
+	private final ExpenseMetrics expenseMetrics;
+
 	private static final Set<String> ALLOWED_SORTS = Set.of("created_at", "updated_at", "submitted_at", "amount", "id");
-	
-	/**
-	 * @param req
-	 * @return 作成された経費申請の情報を含むExpenseResponseオブジェクト
-	 */
+
+	@Timed(value = "expense.create.duration", description = "経費申請作成の処理時間")
 	@Transactional
 	public ExpenseResponse create(ExpenseCreateRequest req) {
-
-		//認証サービスから現在のユーザーＩＤを取得
 		Long currentUserId = authenticationContext.getCurrentUserId();
-		
-		//エンティティを作成
+
 		Expense expense = Expense.create(
 				currentUserId,
 				req.title(),
 				req.amount(),
 				req.currency());
 
-		
-		//データベースに保存
 		expenseMapper.insert(expense);
 
-		
-        //監査ログを記録
 		auditLogMapper.insert(ExpenseAuditLog.create(
 				expense.getId(),
 				currentUserId,
 				traceId()
 		));
 
-		
+		expenseMetrics.incrementCreated();
 		return ExpenseResponse.toResponse(expense);
 	}
 	/**
@@ -138,31 +131,26 @@ public class ExpenseService {
 	/**
 	 * 経費提出
 	 */
+	@Timed(value = "expense.submit.duration", description = "経費申請提出の処理時間")
 	@Transactional
 	public ExpenseResponse submit(Long expenseId, Long applicantId) {
-		
-		
-		//経費申請の取得
-		Expense current =expenseMapper.findById(expenseId);
-		if(current == null) {
+		Expense current = expenseMapper.findById(expenseId);
+		if (current == null) {
 			throw new NoSuchElementException("Expense not found: " + expenseId);
 		}
-		
-		if(!current.canBeSubmittedBy(applicantId)) {
+
+		if (!current.canBeSubmittedBy(applicantId)) {
 			throw new BusinessException("INVALID_STATUS_TRANSITION", "ステータスもしくは本人ではないため提出できません");
 		}
-		
-		//提出処理
+
 		int updated = expenseMapper.submitDraft(expenseId);
-		
-		if(updated == 0) {
-			throw new BusinessException("INVALID_STATUS_TRANSITION",
-					"下書き以外提出できません");
+
+		if (updated == 0) {
+			throw new BusinessException("INVALID_STATUS_TRANSITION", "下書き以外提出できません");
 		}
-		
-		//監査ログ登録
+
 		auditLogMapper.insert(ExpenseAuditLog.createDraft(expenseId, applicantId, traceId()));
-		
+
 		expenseKafkaProducer.publish(
 				new ExpenseEventMessage(
 						com.example.expenses.kafka.ExpenseEventMessage.EventType.SUBMITTED,
@@ -172,41 +160,37 @@ public class ExpenseService {
 						null,
 						traceId()));
 
+		expenseMetrics.incrementSubmitted();
 		return ExpenseResponse.toResponse(expenseMapper.findById(expenseId));
 	}
 	
 	/**
 	 * 経費承認
 	 */
+	@Timed(value = "expense.approve.duration", description = "経費申請承認の処理時間")
 	@Transactional
 	public ExpenseResponse approve(long expenseId, int version, Long approverId) {
-		
-
-		//経費取得
 		Expense expense = expenseMapper.findById(expenseId);
-		
-		//存在確認
-		if(expense == null) {
+
+		if (expense == null) {
 			throw new BusinessException("NOT_FOUND", "経費申請が見つかりません: EXPENSEID ：" + expenseId, traceId());
 		}
-		
-		if(!expense.canBeApproved()) {
-			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は承認できません", traceId());	
+
+		if (!expense.canBeApproved()) {
+			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は承認できません", traceId());
 		}
-		
-		//二重更新チェック
-		if(expense.getVersion()!= version) {
+
+		if (expense.getVersion() != version) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId());
 		}
-		//承認処理
+
 		int updated = expenseMapper.approve(expenseId, version);
-		if(updated == 0) {
+		if (updated == 0) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId());
 		}
-		
-		//監査ログ登録
+
 		auditLogMapper.insert(ExpenseAuditLog.createApprove(expenseId, approverId, traceId()));
-		
+
 		expenseKafkaProducer.publish(
 				new ExpenseEventMessage(
 						EventType.APPROVED,
@@ -216,44 +200,38 @@ public class ExpenseService {
 						null,
 						traceId()));
 
-		//更新後の経費を取得して返す
+		expenseMetrics.incrementApproved();
 		return ExpenseResponse.toResponse(expenseMapper.findById(expenseId));
-		
-		
 	}
 	
 	/**
 	 * 経費却下
 	 */
+	@Timed(value = "expense.reject.duration", description = "経費申請却下の処理時間")
 	@Transactional
 	public ExpenseResponse reject(long expenseId, String reason, int version, Long rejectorId) {
-		
 		String traceId = traceId();
-		//経費取得
-		Expense expense = expenseMapper.findById(expenseId);	
-		//存在確認
-		if(expense == null) {
+		Expense expense = expenseMapper.findById(expenseId);
+		if (expense == null) {
 			throw new BusinessException("NOT_FOUND", "経費申請が見つかりません: EXPENSEID ：" + expenseId, traceId);
 		}
-		//ビジネスルールチェック
-		if(!expense.canBeRejected()) {
-			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は却下できません", traceId);	
+
+		if (!expense.canBeRejected()) {
+			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は却下できません", traceId);
 		}
-		//二重更新チェック
-		if(expense.getVersion() != version) {
-			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId);
-		}
-		//却下処理
-		int updated = expenseMapper.reject(expenseId, version);
-		
-		
-		if(updated == 0) {
+
+		if (expense.getVersion() != version) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId);
 		}
 
-		//監査ログ登録
+		int updated = expenseMapper.reject(expenseId, version);
+
+		if (updated == 0) {
+			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId);
+		}
+
 		auditLogMapper.insert(ExpenseAuditLog.createReject(expenseId, rejectorId, traceId, reason));
-		
+
 		expenseKafkaProducer.publish(
 				new ExpenseEventMessage(
 						EventType.REJECTED,
@@ -262,7 +240,8 @@ public class ExpenseService {
 						expense.getApplicantId(),
 						reason,
 						traceId));
-		//更新後の経費を取得して返す
+
+		expenseMetrics.incrementRejected();
 		return ExpenseResponse.toResponse(expenseMapper.findById(expenseId));
 	}
 	

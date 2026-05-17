@@ -17,7 +17,7 @@ public class ExpenseServiceNormalizedOrderByTest {
 	
 	@BeforeEach
 	void setUp() throws Exception{
-		service = new ExpenseService(null, null, null, null);
+		service = new ExpenseService(null, null, null, null, null);
 		method = ExpenseService.class.getDeclaredMethod("normalizedOrderBy", String.class);
 		normalizedDirectionMethod = ExpenseService.class.getDeclaredMethod("normalizedDirection", String.class);
 		method.setAccessible(true);
