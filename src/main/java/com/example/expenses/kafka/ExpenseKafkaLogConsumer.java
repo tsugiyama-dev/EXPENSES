@@ -7,7 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Component
 @Slf4j
-public class ExpenseKafkaConsumer {
+public class ExpenseKafkaLogConsumer {
 
 	@KafkaListener(topics = ExpenseTopics.EXPENSE_EVENT, groupId = "expenses-audit-log")
 	public void consume(ExpenseEventMessage message) {

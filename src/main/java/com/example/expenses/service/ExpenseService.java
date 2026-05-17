@@ -11,17 +11,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.expenses.config.TraceIdFilter;
 import com.example.expenses.domain.Expense;
-import com.example.expenses.domain.User;
 import com.example.expenses.dto.ExpenseAuditLog;
 import com.example.expenses.dto.request.ExpenseCreateRequest;
 import com.example.expenses.dto.request.ExpenseSearchCriteria;
 import com.example.expenses.dto.request.ExpenseSearchCriteriaEntity;
 import com.example.expenses.dto.response.ExpenseResponse;
 import com.example.expenses.dto.response.PaginationResponse;
-import com.example.expenses.event.ExpenseApprovedEvent;
-import com.example.expenses.event.ExpenseRejectedEvent;
-import com.example.expenses.event.ExpenseSubmittedEvent;
 import com.example.expenses.exception.BusinessException;
+import com.example.expenses.kafka.ExpenseEventMessage;
+import com.example.expenses.kafka.ExpenseEventMessage.EventType;
+import com.example.expenses.kafka.ExpenseKafkaProducer;
 import com.example.expenses.repository.ExpenseAuditLogMapper;
 import com.example.expenses.repository.ExpenseMapper;
 import com.example.expenses.repository.UserMapper;
@@ -39,6 +38,7 @@ public class ExpenseService {
 	private final AuthenticationContext authenticationContext;
 	private final ApplicationEventPublisher eventPublisher;
 	private final UserMapper userMapper;
+	private final ExpenseKafkaProducer expenseKafkaProducer;
 	
 	private static final Set<String> ALLOWED_SORTS = Set.of("created_at", "updated_at", "submitted_at", "amount", "id");
 	
@@ -70,6 +70,7 @@ public class ExpenseService {
 				currentUserId,
 				traceId()
 		));
+
 		
 		return ExpenseResponse.toResponse(expense);
 	}
@@ -166,24 +167,16 @@ public class ExpenseService {
 		//監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createDraft(expenseId, applicantId, traceId()));
 		
-		//イベント発行
-		eventPublisher.publishEvent(
-				new ExpenseSubmittedEvent(
-						expenseId,
-						applicantId,
-						traceId()
-						));
-		
+		expenseKafkaProducer.publish(
+				new ExpenseEventMessage(
+						com.example.expenses.kafka.ExpenseEventMessage.EventType.SUBMITTED,
+						current.getId(),
+						current.getApplicantId(),
+						current.getApplicantId(),
+						null,
+						traceId()));
 
-		User applicantUser = userMapper.findById(applicantId);
-		if(applicantUser == null) {
-			throw new BusinessException("NOT_FOUND", "ユーザーが見つかりません");
-		}
-
-		
-		//6.結果を返す
-		Expense saved = expenseMapper.findById(expenseId);
-		return ExpenseResponse.toResponse(saved);
+		return ExpenseResponse.toResponse(expenseMapper.findById(expenseId));
 	}
 	
 	/**
@@ -215,34 +208,20 @@ public class ExpenseService {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId());
 		}
 		
-		// WebSocket 通知送信
-//		User approver = userMapper.findById(approverId);
-//		if(approver == null) {
-//			throw new BusinessException("NOT_FOUND", "承認者が見つかりません: " + approverId);
-//		}
-//
-//		User applicantUser = userMapper.findById(expense.getApplicantId());
-//		if(applicantUser == null) {
-//			throw new BusinessException("NOT_FOUND", "申請者が見つかりません: " + expense.getApplicantId());
-//		}
-
-
-		
 		//監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createApprove(expenseId, approverId, traceId()));
 		
-		//イベントを発行
-		eventPublisher.publishEvent(
-				new ExpenseApprovedEvent(
-						expenseId,
+		expenseKafkaProducer.publish(
+				new ExpenseEventMessage(
+						EventType.APPROVED,
+						expense.getId(),
 						approverId,
 						expense.getApplicantId(),
-						traceId()
-						));
+						null,
+						traceId()));
 
 		//更新後の経費を取得して返す
-		var saved = expenseMapper.findById(expenseId);
-		return ExpenseResponse.toResponse(saved);
+		return ExpenseResponse.toResponse(expenseMapper.findById(expenseId));
 		
 		
 	}
@@ -251,7 +230,7 @@ public class ExpenseService {
 	 * 経費却下
 	 */
 	@Transactional
-	public ExpenseResponse reject(long expenseId, String reason, int version, Long approverId) {
+	public ExpenseResponse reject(long expenseId, String reason, int version, Long rejectorId) {
 		
 		String traceId = traceId();
 		//経費取得
@@ -275,27 +254,20 @@ public class ExpenseService {
 		if(updated == 0) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId);
 		}
-		
-		User approver = userMapper.findById(approverId);
-		if(approver == null) {
-			throw new BusinessException("NOT_FOUND", "承認者が見つかりません: " + approverId);
-		}
 
 		//監査ログ登録
-		auditLogMapper.insert(ExpenseAuditLog.createReject(expenseId, approverId, traceId, reason));
+		auditLogMapper.insert(ExpenseAuditLog.createReject(expenseId, rejectorId, traceId, reason));
 		
-		//イベント発行
-		eventPublisher.publishEvent(
-				new ExpenseRejectedEvent(
-						expenseId,
-						approverId,
-						traceId,
+		expenseKafkaProducer.publish(
+				new ExpenseEventMessage(
+						EventType.REJECTED,
+						expense.getId(),
+						rejectorId,
 						expense.getApplicantId(),
-						reason
-						));
+						reason,
+						traceId));
 		//更新後の経費を取得して返す
-		var saved = expenseMapper.findById(expenseId);
-		return ExpenseResponse.toResponse(saved);
+		return ExpenseResponse.toResponse(expenseMapper.findById(expenseId));
 	}
 	
 	

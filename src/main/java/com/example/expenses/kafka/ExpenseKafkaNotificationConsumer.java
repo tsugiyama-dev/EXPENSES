@@ -46,7 +46,7 @@ public class ExpenseKafkaNotificationConsumer {
 
 		Expense expense = expenseMapper.findById(message.getExpenseId());
 		if (expense == null) {
-			log.warn("Skip WebSocket notification. expense not found: {}", message.getExpenseId());
+			log.warn("通知スキップ. 経費がみつかりません: {}", message.getExpenseId());
 			return;
 		}
 
@@ -55,7 +55,7 @@ public class ExpenseKafkaNotificationConsumer {
 				NotificationType.EXPENSE_SUBMITTED,
 				expense,
 				applicantEmail,
-				"Expense submitted #" + message.getExpenseId()));
+				"提出された経費 #" + message.getExpenseId()));
 	}
 
 	private void handleApproved(ExpenseEventMessage message) {
@@ -64,7 +64,7 @@ public class ExpenseKafkaNotificationConsumer {
 
 		Expense expense = expenseMapper.findById(message.getExpenseId());
 		if (expense == null) {
-			log.warn("Skip WebSocket notification. expense not found: {}", message.getExpenseId());
+			log.warn("通知スキップ. 経費がみつかりません: {}", message.getExpenseId());
 			return;
 		}
 
@@ -72,7 +72,7 @@ public class ExpenseKafkaNotificationConsumer {
 				NotificationType.EXPENSE_APPROVED,
 				expense,
 				applicantEmail,
-				"Expense approved #" + message.getExpenseId()));
+				"承認された経費 #" + message.getExpenseId()));
 	}
 
 	private void handleRejected(ExpenseEventMessage message) {
@@ -81,7 +81,7 @@ public class ExpenseKafkaNotificationConsumer {
 
 		Expense expense = expenseMapper.findById(message.getExpenseId());
 		if (expense == null) {
-			log.warn("Skip WebSocket notification. expense not found: {}", message.getExpenseId());
+			log.warn("通知スキップ. 経費がみつかりません: {}", message.getExpenseId());
 			return;
 		}
 
@@ -89,7 +89,7 @@ public class ExpenseKafkaNotificationConsumer {
 				NotificationType.EXPENSE_REJECTED,
 				expense,
 				applicantEmail,
-				"Expense rejected #" + message.getExpenseId()));
+				"却下された経費 #" + message.getExpenseId()));
 	}
 
 	private NotificationMessage buildMessage(
