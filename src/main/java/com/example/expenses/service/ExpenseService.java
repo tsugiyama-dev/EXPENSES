@@ -5,7 +5,6 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 
 import org.slf4j.MDC;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +22,6 @@ import com.example.expenses.kafka.ExpenseEventMessage.EventType;
 import com.example.expenses.kafka.ExpenseKafkaProducer;
 import com.example.expenses.repository.ExpenseAuditLogMapper;
 import com.example.expenses.repository.ExpenseMapper;
-import com.example.expenses.repository.UserMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,8 +34,6 @@ public class ExpenseService {
 	private final ExpenseMapper expenseMapper;
 	private final ExpenseAuditLogMapper auditLogMapper;
 	private final AuthenticationContext authenticationContext;
-	private final ApplicationEventPublisher eventPublisher;
-	private final UserMapper userMapper;
 	private final ExpenseKafkaProducer expenseKafkaProducer;
 	
 	private static final Set<String> ALLOWED_SORTS = Set.of("created_at", "updated_at", "submitted_at", "amount", "id");
