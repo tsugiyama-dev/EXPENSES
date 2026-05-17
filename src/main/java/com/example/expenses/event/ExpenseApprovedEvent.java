@@ -15,7 +15,7 @@ public class ExpenseApprovedEvent extends ExpenseEvent {
 	public ExpenseApprovedEvent(
 			Long expenseId, Long approverId,
 			Long applicantId, String traceId) {
-		
+
 		super(expenseId, approverId, traceId);
 		this.approverId = approverId;
 		this.applicantId = applicantId;

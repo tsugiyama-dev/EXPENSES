@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.example.expenses.config.TraceIdFilter;
 import com.example.expenses.exception.ApiErrorResponse.Detail;
@@ -47,6 +48,19 @@ public class GlobalApiExceptionHandler {
 		ApiErrorResponse response = new ApiErrorResponse(
 				"REQUREST_NOT_FOUND",
 				"リクエストが見つかりません",
+				List.of(detail),
+				traceId());
+		
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+	}
+	
+	@ExceptionHandler(NoResourceFoundException.class)
+	public ResponseEntity<ApiErrorResponse> commoneError(NoResourceFoundException e) {
+		
+		var detail = new Detail(e.getResourcePath(), e.getMessage());
+		ApiErrorResponse response = new ApiErrorResponse(
+				"REQUEST_NOT_FOUND",
+				"リソースが見つかりません",
 				List.of(detail),
 				traceId());
 		

@@ -37,13 +37,14 @@ public class DataAggregationTasklet implements Tasklet {
 		
 		// 前月の年月を計算
 //		YearMonth lastMonth = YearMonth.now();
-		YearMonth lastMonth = YearMonth.now().minusMonths(2);
+		YearMonth lastMonth = YearMonth.now().minusMonths(1);
 		LocalDateTime startDate = lastMonth.atDay(1).atStartOfDay();
 		LocalDateTime endDate = lastMonth.atEndOfMonth().atTime(23, 59, 59);
 		
 		logger.info("集計期間:{} ～ {}", startDate, endDate);
 		
 		// 前月のExpenseデータ取得
+		
 		List<Expense> expenses = expenseMapper.findByPeriod(startDate, endDate);
 		logger.info("取得件数:{}", expenses.size());
 		
@@ -73,7 +74,8 @@ public class DataAggregationTasklet implements Tasklet {
 		for(MonthlyExpenseReport.StatusSummary summary : statusSummaries.values()) {
 			if(totalAmount.compareTo(BigDecimal.ZERO)> 0 ) {
 				double percentage = summary.getAmount()
-						.divide(totalAmount, 4, RoundingMode.HALF_UP)
+//						.divide(BigDecimal.valueOf(summary.getCount()), 4, RoundingMode.HALF_UP)// (件数、小数点桁数、丸め処理)
+						.divide(totalAmount, 6, RoundingMode.HALF_UP)// (合計、小数点桁数、丸め処理)
 						.multiply(BigDecimal.valueOf(100))
 						.doubleValue();
 				summary.setPercentage(percentage);

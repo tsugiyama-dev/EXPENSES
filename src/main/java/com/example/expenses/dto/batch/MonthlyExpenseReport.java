@@ -1,5 +1,6 @@
 package com.example.expenses.dto.batch;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.util.Map;
@@ -15,7 +16,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class MonthlyExpenseReport {
+public class MonthlyExpenseReport implements Serializable {
 
 	private YearMonth targetMonth;
 	
@@ -29,7 +30,7 @@ public class MonthlyExpenseReport {
 	@Builder
 	@NoArgsConstructor
 	@AllArgsConstructor
-	public static class StatusSummary {
+	public static class StatusSummary implements Serializable{
 		
 		private int  count;
 		

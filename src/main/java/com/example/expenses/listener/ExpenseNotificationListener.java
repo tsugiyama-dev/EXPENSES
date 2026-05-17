@@ -1,6 +1,7 @@
 package com.example.expenses.listener;
 
 import org.springframework.context.event.EventListener;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
  * -通知失敗してもメイン処理に影響を与えないようにする
  */
 @Component
+@ConditionalOnProperty(name = "app.events.direct-listeners.enabled", havingValue = "true")
 @RequiredArgsConstructor
 @Slf4j
 public class ExpenseNotificationListener {

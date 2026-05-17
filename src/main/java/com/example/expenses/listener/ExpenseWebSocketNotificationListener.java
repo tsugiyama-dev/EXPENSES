@@ -1,0 +1,112 @@
+package com.example.expenses.listener;
+
+import java.time.LocalDateTime;
+
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+
+import com.example.expenses.dto.NotificationMessage;
+import com.example.expenses.dto.NotificationMessage.NotificationType;
+import com.example.expenses.event.ExpenseApprovedEvent;
+import com.example.expenses.event.ExpenseRejectedEvent;
+import com.example.expenses.event.ExpenseSubmittedEvent;
+import com.example.expenses.repository.ExpenseMapper;
+import com.example.expenses.repository.UserMapper;
+import com.example.expenses.websocket.RedisWebSocketPublisher;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * Redis を中継して複数インスタンスに通知が届く
+ * - 提出: 全員へブロードキャスト
+ * - 承認/却下: 申請者個人へ送信
+ */
+@Component
+@ConditionalOnProperty(name = "app.events.direct-listeners.enabled", havingValue = "true")
+@RequiredArgsConstructor
+@Slf4j
+public class ExpenseWebSocketNotificationListener {
+
+	private final RedisWebSocketPublisher publisher;
+	private final ExpenseMapper expenseMapper;
+	private final UserMapper userMapper;
+	
+	@EventListener
+	public void handleSubmitted(ExpenseSubmittedEvent event) {
+		
+		var expense = expenseMapper.findById(event.getExpenseId());
+		
+	    if(expense == null) {
+	    		log.warn("経費が見つかりません：{}", event.getExpenseId());
+	    		return;
+	    }		
+
+		String email = userMapper.findEmailById(expense.getApplicantId());
+		
+		var msg = NotificationMessage.builder()
+				.type(NotificationType.EXPENSE_SUBMITTED)
+				.expenseId(event.getExpenseId())
+				.title(expense.getTitle())
+				.amount(expense.getAmount().toString())
+				.applicantEmail(email) 
+ 				.message("経費申請 #" + event.getExpenseId() + "が提出されました")
+				.timestamp(LocalDateTime.now())
+				.build();
+		
+		log.debug("WebSocket broadcast: SUBMITTED expenseId={}", event.getExpenseId());
+		publisher.broadcast(msg);
+	}
+	
+	@EventListener
+	public void handleApproved(ExpenseApprovedEvent event) {
+		
+		var expense = expenseMapper.findById(event.getExpenseId());
+			if(expense == null) {
+                log.warn("経費が見つかりません：" + event.getExpenseId());
+				return;
+			}
+				
+		String email = userMapper.findEmailById(expense.getApplicantId());
+		
+		var msg = NotificationMessage.builder()
+				.type(NotificationType.EXPENSE_APPROVED)
+				.expenseId(event.getExpenseId())
+				.title(expense.getTitle())
+				.amount(expense.getAmount().toString())
+				.applicantEmail(email)
+				.message("経費申請 #" + event.getExpenseId() + "が承認されました")
+				.timestamp(LocalDateTime.now())
+				.build();
+		
+		log.debug("WebSocket personal: APPROVED expenseId={}, applicantId={}", event.getExpenseId(), event.getApplicantId());
+		publisher.sendToUser(event.getApplicantId(), msg);
+	}
+	
+	@EventListener
+	public void handleRejected(ExpenseRejectedEvent event) {
+        var expense = expenseMapper.findById(event.getExpenseId());
+       
+        if(expense == null) {
+        	log.warn("経費が見つかりません：" + event.getExpenseId());
+        	return;
+		}
+		
+		String email = userMapper.findEmailById(expense.getApplicantId());
+		
+		var msg = NotificationMessage.builder()
+				.type(NotificationType.EXPENSE_REJECTED)
+				.expenseId(event.getExpenseId())
+				.title(expense.getTitle())
+				.amount(expense.getAmount().toString())
+				.applicantEmail(email)
+				.message("経費申請 #" + event.getExpenseId() + "が却下されました")
+				.timestamp(LocalDateTime.now())
+				.build();
+		
+		log.debug("WebSocket personal: REJECTED expenseId={}, applicantId={}", event.getExpenseId(), event.getApplicantId());
+
+		publisher.sendToUser(event.getApplicantId(), msg);
+	}
+}

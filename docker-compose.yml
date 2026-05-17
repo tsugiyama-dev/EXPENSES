@@ -1,8 +1,83 @@
 
 
 services:
+  app1:
+    build: .
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      mysql:
+       condition: service_healthy
+      redis:
+       condition: service_started
+      mailhog:
+        condition: service_started
+      kafka:
+        condition: service_started
+    ports:  
+      - "8080:8080" #ports: "ホスト:コンテナ"
+  
+  app2:
+    build: .
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      mysql:
+       condition: service_healthy
+      redis:
+       condition: service_started
+      mailhog:
+        condition: service_started
+      kafka:
+        condition: service_started
+    ports: 
+      - "8081:8080" #ports: "ホスト:コンテナ"
+       
+  mysql:
+      image: mysql:8
+      environment:
+       MYSQL_DATABASE: newschema
+       MYSQL_USER: app
+       MYSQL_PASSWORD: AppStrongPass_1234!
+       MYSQL_ROOT_PASSWORD: root
+      ports:
+        - "3307:3306" #ports: "ホスト:コンテナ"
+      volumes:
+        - mysql-data:/var/lib/mysql
+      healthcheck:
+        test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot --silent"]
+        interval: 5s #5秒ごとに確認
+        timeout: 3s #3秒待機して応答がなかったら失敗
+        retries: 30 #30回リトライ
+        start_period: 20s #最初の20秒間は失敗をカウントしない
+      
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379" #ports: "ホスト:コンテナ"
+
   mailhog:
    image: mailhog/mailhog:latest
    ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "1025:1025" #ports: "ホスト:コンテナ"
+      - "8025:8025" #ports: "ホスト:コンテナ"
+      
+  kafka:
+    image: apache/kafka:latest
+    ports:
+      - "9092:9092"
+    environment:
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_LISTENERS=PLAINTEXT://:29092,CONTROLLER://:9093,EXTERNAL://:9092
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+
+
+volumes:
+ mysql-data:

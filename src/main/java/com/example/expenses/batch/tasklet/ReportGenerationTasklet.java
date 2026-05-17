@@ -93,7 +93,7 @@ public class ReportGenerationTasklet implements Tasklet {
 			titleCell.setCellValue("月次経費レポート - " + 
 			   report.getTargetMonth().format(DateTimeFormatter.ofPattern("yyyy年MM月")));
 			
-			rowNum++;
+			rowNum++; //　１行改行
 			
 			Row headerRow  = sheet.createRow(rowNum++);
 			String[] headers = {"ステータス", "件数", "合計金額", "割合"};
