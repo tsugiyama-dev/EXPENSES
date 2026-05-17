@@ -46,4 +46,11 @@ public interface UserMapper {
 			LIMIT 1
 			""")
 	String findAnyApproverEmail();
+	
+	@Select("""
+			SELECT * FROM users
+			WHERE id = #{id}
+			""")
+	User findById(Long actorId);
+
 }
