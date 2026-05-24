@@ -5,6 +5,7 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 
 import org.slf4j.MDC;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,10 +17,10 @@ import com.example.expenses.dto.request.ExpenseSearchCriteria;
 import com.example.expenses.dto.request.ExpenseSearchCriteriaEntity;
 import com.example.expenses.dto.response.ExpenseResponse;
 import com.example.expenses.dto.response.PaginationResponse;
+import com.example.expenses.event.ExpenseApprovedEvent;
+import com.example.expenses.event.ExpenseRejectedEvent;
+import com.example.expenses.event.ExpenseSubmittedEvent;
 import com.example.expenses.exception.BusinessException;
-import com.example.expenses.kafka.ExpenseEventMessage;
-import com.example.expenses.kafka.ExpenseEventMessage.EventType;
-import com.example.expenses.kafka.ExpenseKafkaProducer;
 import com.example.expenses.repository.ExpenseAuditLogMapper;
 import com.example.expenses.repository.ExpenseMapper;
 
@@ -27,14 +28,21 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
-@RequiredArgsConstructor//Lombokが全フィールドのコンストラクタを自動生成
+@RequiredArgsConstructor
 @Slf4j
 public class ExpenseService {
 
 	private final ExpenseMapper expenseMapper;
 	private final ExpenseAuditLogMapper auditLogMapper;
 	private final AuthenticationContext authenticationContext;
-	private final ExpenseKafkaProducer expenseKafkaProducer;
+	/*
+	 * ApplicationEventPublisher：Spring の組み込みインターフェース。
+	 * publishEvent() を呼ぶと、同じ JVM 内の @EventListener や
+	 * @TransactionalEventListener が受け取る。
+	 * Kafka への送信は ExpenseKafkaBridgeListener が担当するため、
+	 * このクラスは Kafka の存在を知らなくてよい（疎結合）。
+	 */
+	private final ApplicationEventPublisher eventPublisher;
 	
 	private static final Set<String> ALLOWED_SORTS = Set.of("created_at", "updated_at", "submitted_at", "amount", "id");
 	
@@ -162,15 +170,19 @@ public class ExpenseService {
 		
 		//監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createDraft(expenseId, applicantId, traceId()));
-		
-		expenseKafkaProducer.publish(
-				new ExpenseEventMessage(
-						com.example.expenses.kafka.ExpenseEventMessage.EventType.SUBMITTED,
-						current.getId(),
-						current.getApplicantId(),
-						current.getApplicantId(),
-						null,
-						traceId()));
+
+		/*
+		 * publishEvent() はここで Spring Event を発行する。
+		 * BridgeListener の @TransactionalEventListener(AFTER_COMMIT) が
+		 * このトランザクションのコミット完了後に受け取り、Kafka へ送信する。
+		 *
+		 * もし @EventListener（通常）を使っていたら：
+		 *   → トランザクション中に発火 → DB ロールバックしても Kafka にはメッセージが届く（不整合）
+		 * AFTER_COMMIT にすることで：
+		 *   → DB が確定してから Kafka に送る（整合性が保たれる）
+		 */
+		eventPublisher.publishEvent(
+				new ExpenseSubmittedEvent(expenseId, applicantId, traceId()));
 
 		return ExpenseResponse.toResponse(expenseMapper.findById(expenseId));
 	}
@@ -206,15 +218,9 @@ public class ExpenseService {
 		
 		//監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createApprove(expenseId, approverId, traceId()));
-		
-		expenseKafkaProducer.publish(
-				new ExpenseEventMessage(
-						EventType.APPROVED,
-						expense.getId(),
-						approverId,
-						expense.getApplicantId(),
-						null,
-						traceId()));
+
+		eventPublisher.publishEvent(
+				new ExpenseApprovedEvent(expenseId, approverId, expense.getApplicantId(), traceId()));
 
 		//更新後の経費を取得して返す
 		return ExpenseResponse.toResponse(expenseMapper.findById(expenseId));
@@ -253,15 +259,10 @@ public class ExpenseService {
 
 		//監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createReject(expenseId, rejectorId, traceId, reason));
-		
-		expenseKafkaProducer.publish(
-				new ExpenseEventMessage(
-						EventType.REJECTED,
-						expense.getId(),
-						rejectorId,
-						expense.getApplicantId(),
-						reason,
-						traceId));
+
+		eventPublisher.publishEvent(
+				new ExpenseRejectedEvent(expenseId, rejectorId, traceId, expense.getApplicantId(), reason));
+
 		//更新後の経費を取得して返す
 		return ExpenseResponse.toResponse(expenseMapper.findById(expenseId));
 	}
