@@ -188,7 +188,7 @@ public interface ExpenseMapper {
 			@Param("criteria")ExpenseSearchCriteriaEntity criteria,
 			@Param("orderBy")String orderBy,
 			@Param("direction")String direction);
-	
+
 	@Select("""
 			SELECT id, applicant_id, title, amount, currency, status,
 			submitted_at, created_at, updated_at, version
@@ -198,13 +198,24 @@ public interface ExpenseMapper {
 			ORDER BY created_at ASC
 			""")
 	List<Expense> findByPeriod(@Param("start")LocalDateTime start,@Param("end") LocalDateTime end);
-	
+
+	/**
+	 * カーソルベース ページング（Spring Batch 向け）
+	 * PagingBatchConfiguration の MyBatisItemReader から使用される。
+	 * maxId より小さい id のレコードを昇順で返す。
+	 * バッチが前ページの最終 id を maxId として渡すことで順次フェッチする。
+	 */
 	List<Expense> findAllWithPaging(@Param("maxId") Long maxId);
-	
+
 	@Select("""
 			SELECT COALESCE(MAX(id), 0) FROM expenses
 			""")
 	Long findMaxId();
-	
-	List<Expense> findByIdRange(@Param("minId")  Long minId, @Param("maxId") Long maxId);
+
+	/**
+	 * ID 範囲指定による読み込み（Spring Batch 並列処理向け）
+	 * ParallelBatchConfiguration から使用される。
+	 * データを ID 範囲で分割し、複数スレッドが並列で処理する際に使う。
+	 */
+	List<Expense> findByIdRange(@Param("minId") Long minId, @Param("maxId") Long maxId);
 }
