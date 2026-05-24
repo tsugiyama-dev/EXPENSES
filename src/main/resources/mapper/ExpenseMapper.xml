@@ -6,7 +6,11 @@
   
   <mapper namespace="com.example.expenses.repository.ExpenseMapper">
 
-  <!-- コンストラクタマッピング用のresultMap -->
+  <!-- 
+  コンストラクタマッピング用 resultMap
+  Expense ドメインオブジェクトは全フィールドがfinalのため、
+  setter ではなくコンストラクタインジェクションを使用
+   -->
   <resultMap id="expenseResultMap" type="Expense">
     <constructor>
       <idArg column="id" javaType="Long"/>
@@ -22,6 +26,19 @@
     </constructor>
   </resultMap>
 
+  <!-- 
+  offset-limit ページング UI向け検索クエリ
+  - LIMIT / OFFSET によるページング（ページ番号方式）
+  - ページ数が増えるとOFFSETの値が大きくなりパフォーマンスが低下する特性がある
+  - 用途：画面の一覧表示(ページネーション付き）
+  
+  【ORDER BY の${}(文字列補完）について】
+  MyBatisの#{}はプリペアドステートメントのバインド変数になるため、
+  カラム名や ASC･DESCの指定には使えない
+  そのため ORDER BY には${}を使うが、SQLインジェクションのりすくがある。
+  → ExpenseService#normalizedOrderBy()と#normalizedDirection()で
+  ALLOWED_SORTS 許可リストに対する検証を行い、安全な値のみ渡している。
+   -->
   <select id="search" resultMap="expenseResultMap">
   	SELECT 
   		id,
@@ -34,64 +51,72 @@
   		created_at,
   		updated_at,
   		version
-  	FROM
-  		expenses
-  	WHERE
-  		1 = 1
-  	<if test="criteria.applicantId != null">
-  		AND applicant_id = #{criteria.applicantId}
-  	</if>
-  	<if test="criteria.title != null and criteria.title != '' ">
-  		AND title LIKE CONCAT('%', #{criteria.title}, '%')
-  	</if>
-  	<if test="criteria.amountMin != null">
-  		AND amount &gt;= #{criteria.amountMin}
-  	</if>
-  	<if test="criteria.amountMax != null">
-  		AND amount &lt;= #{criteria.amountMax}
-  	</if>
-  	<if test="criteria.status != null and criteria.status != ''">
-  		AND status = #{criteria.status}
-  	</if>
-  	<if test="criteria.submittedFrom != null">
-  		AND submitted_at <![CDATA[>=]]> #{criteria.submittedFrom}
-  	</if>
-  	<if test="criteria.submittedTo != null">
-  		AND submitted_at &lt;= #{criteria.submittedTo}
-  	</if>
+  	FROM expenses
+  	<!-- 
+  	<where> タグ：囲んだ<if>が１つでも真になるとWHEREを自動で付与して、
+  	先頭の AND/OR を取り除いてくれる
+  	"WHERE 1=1" と書くより 意図が明確で余分な条件が残らない。
+  	 -->
+  		<where>
+		  	<if test="criteria.applicantId != null">
+		  		AND applicant_id = #{criteria.applicantId}
+		  	</if>
+		  	<if test="criteria.title != null and criteria.title != '' ">
+		  		AND title LIKE CONCAT('%', #{criteria.title}, '%')
+		  	</if>
+		  	<if test="criteria.amountMin != null">
+		  		AND amount &gt;= #{criteria.amountMin}
+		  	</if>
+		  	<if test="criteria.amountMax != null">
+		  		AND amount &lt;= #{criteria.amountMax}
+		  	</if>
+		  	<if test="criteria.status != null and criteria.status != ''">
+		  		AND status = #{criteria.status}
+		  	</if>
+		  	<if test="criteria.submittedFrom != null">
+		  		AND submitted_at <![CDATA[>=]]> #{criteria.submittedFrom}
+		  	</if>
+		  	<if test="criteria.submittedTo != null">
+		  		AND submitted_at &lt;= #{criteria.submittedTo}
+		  	</if>
+  		</where>
   	
-  	ORDER BY ${orderBy} ${direction}
-  	LIMIT #{size} OFFSET  #{offset}
+	  	ORDER BY ${orderBy} ${direction}
+	  	LIMIT #{size} OFFSET #{offset}
   </select>
   
+  
+  <!-- 
+  search クエリと同じ条件で件数を取得するクエリ
+   -->
     <select id="count" resultType="long">
   	SELECT 
   		count(*)
-  	FROM
-  		expenses
-  	WHERE
-  		1 = 1
-  	<if test="criteria.applicantId != null">
-  		AND applicant_id = #{criteria.applicantId}
-  	</if>
-  	<if test="criteria.title != null and criteria.title != '' ">
-  		AND title LIKE CONCAT('%', #{criteria.title}, '%')
-  	</if>
-  	<if test="criteria.amountMin != null">
-  		AND amount &gt;= #{criteria.amountMin}
-  	</if>
-  	<if test="criteria.amountMax != null">
-  		AND amount &lt;= #{criteria.amountMax}
-  	</if>
-  	<if test="criteria.status != null and criteria.status != ''">
-  		AND status = #{criteria.status}
-  	</if>
-  	<if test="criteria.submittedFrom != null">
-  		AND submitted_at <![CDATA[>=]]> #{criteria.submittedFrom}
-  	</if>
-  	<if test="criteria.submittedTo != null">
-  		AND submitted_at &lt;= #{criteria.submittedTo}
-  	</if>
+  	FROM expenses
+  	<where>
+	  	<if test="criteria.applicantId != null">
+	  		AND applicant_id = #{criteria.applicantId}
+	  	</if>
+	  	<if test="criteria.title != null and criteria.title != '' ">
+	  		AND title LIKE CONCAT('%', #{criteria.title}, '%')
+	  	</if>
+	  	<if test="criteria.amountMin != null">
+	  		AND amount <![CDATA[>=]]> #{criteria.amountMin}
+	  	</if>
+	  	<if test="criteria.amountMax != null">
+	  		AND amount <![CDATA[<=]]> #{criteria.amountMax}
+	  	</if>
+	  	<if test="criteria.status != null and criteria.status != ''">
+	  		AND status = #{criteria.status}
+	  	</if>
+	  	<if test="criteria.submittedFrom != null">
+	  		AND submitted_at <![CDATA[>=]]> #{criteria.submittedFrom}
+	  	</if>
+	  	<if test="criteria.submittedTo != null">
+	  		AND submitted_at <![CDATA[<=]]> #{criteria.submittedTo}
+	  	</if>
+  	
+  	</where>
   </select>
   
   <update id="approve">
@@ -114,6 +139,13 @@
   		AND status = 'SUBMITTED'
   </update>
   
+  <!-- 
+    CSV エクスポート向けフィルタ検索(ページネーションなし・全件取得）
+    ExpenseExportService から呼び出される。
+    
+    <trim prefix="WHWRE" prefixOverrides="AND |OR "> は
+    <where> タグと同じ動作をする。<where>は<trim>ショートハンド。
+   -->
   <select id="filter" resultMap="expenseResultMap">
   	SELECT
   		id,
@@ -127,71 +159,90 @@
   		updated_at,
   		version
   	FROM expenses
-  	<trim prefix="WHERE" prefixOverrides="AND |OR ">
-  		<if test="criteria.status != ''">
-  			AND status = #{criteria.status}
-  		</if>  	
-  		<if test="criteria.title != null and criteria.title != ''">
-  			AND title LIKE CONCAT('%', #{criteria.title}, '%')
-  		</if>
-  		<if test="criteria.amountMin != null">
-  			AND amount &gt;= #{criteria.amountMin}
-  		</if>
-  		<if test="criteria.amountMax != null">
-  			AND amount &lt;= #{criteria.amountMax}
-  		</if>
-  		<if test="criteria.submittedFrom != null">
-  			AND submitted_at &gt;= #{criteria.submittedFrom}
-  		</if>
-  		<if test="criteria.submittedTo != null">
-  			AND submitted_at &lt;= #{criteria.submittedTo}
-  		</if>
-  	</trim>
+  	<where>
+	  		<if test="criteria.status != null and  criteria.status != ''">
+	  			AND status = #{criteria.status}
+	  		</if>  	
+	  		<if test="criteria.title != null and criteria.title != ''">
+	  			AND title LIKE CONCAT('%', #{criteria.title}, '%')
+	  		</if>
+	  		<if test="criteria.amountMin != null">
+	  			AND amount <![CDATA[>=]]> #{criteria.amountMin}
+	  		</if>
+	  		<if test="criteria.amountMax != null">
+	  			AND amount <![CDATA[<=]]> #{criteria.amountMax}
+	  		</if>
+	  		<if test="criteria.submittedFrom != null">
+	  			AND submitted_at <![CDATA[>=]]> #{criteria.submittedFrom}
+	  		</if>
+	  		<if test="criteria.submittedTo != null">
+	  			AND submitted_at <![CDATA[<=]]> #{criteria.submittedTo}
+	  		</if>
+  	</where>
   	ORDER BY
+  	<!-- 
+  	 <choose> はJavaのswitch-case相当。
+  	 orderByパラメータを文字列で受け取り、許可されたカラムだけを使う
+  	 こうすることで${}（文字列補完）を使わずに動的にORDER BY を安全に実現できる
+  	 -->
   	<choose>
-	  	<when test="orderBy == 'title'">
-	  		title
-	  	</when>
-	  	<when test="orderBy == 'submitted_at'">
-	  		submitted_at
-	  	</when>
-	  	<when test="orderBy == 'updated_at'">
-	  		updated_at
-	  	</when>
-	  	<otherwise>
-	  		created_at
-	  	</otherwise>
+	  	<when test="orderBy == 'title'">title</when>
+	  	<when test="orderBy == 'submitted_at'">submitted_at</when>
+	  	<when test="orderBy == 'updated_at'">updated_at</when>
+	  	<otherwise>created_at</otherwise>
   	</choose>
   	<if test="direction == 'ASC' or direction == 'DESC'">
   		${direction}
   	</if>
-
-  		
-  
   </select>  
   
-  <resultMap type="com.example.expenses.dto.request.ExpenseSearchCriteria" id="expenseSearchMap">
-  		
-  		<constructor>
-  			<arg column="applicant_id" javaType="Long"/>
-  			<arg column="status" javaType="String"/>
-  			<arg column="title" javaType="String"/>
-  			<arg column="amount" javaType="BigDecimal"/>
-  			<arg column="amount" javaType="BigDecimal"/>
-  			<arg column="submitted_at" javaType="java.time.LocalDateTime"/>
-  			<arg column="submitted_at" javaType="java.time.LocalDateTime"/>
-  		</constructor>
-  </resultMap>
-  
+  <!-- 
+      【カーソルベース ページング（Spring Batch用）】
+      
+      offset-limit 方式の問題点：
+        OFFSET 10000のような大きな値では、DBがスキップ対象行もスキャンするため遅い
+        
+        
+      カーソルベース(keyset pagination)の仕組み：
+        前のページの最後の id を ”カーソル ”として保持して
+        WHERE id < #{maxId} で次のページを取得する。
+        → 常にインデックスの先頭から読めるため大量データでも高速。
+        
+       PagingBatchConfiguration (SpringBatch）でMyBatisItemReaderとして使用。
+       バッチがmaxId を渡しながら順次フェッチする。
+   -->
   <select id="findAllWithPaging" resultMap="expenseResultMap">
-  	SELECT *
+  	SELECT
+  	    id,
+  	    applicant}_id,
+  	    title,
+  	    amount,
+  	    currency,
+  	    status,
+  	    submitted_at,
+  	    created_at,
+  	    updated_at,
+  	    version
   	FROM expenses
   	WHERE id <![CDATA[<]]> #{maxId}
   	ORDER BY id ASC
-  
   </select>
+  
+  
+  <!-- 
+      【ID 範囲指定による並列バッチ読み込み】
+      
+      
+      ParallelBatchConfiguration (Spring Batch) で使用。
+      データをID 範囲で分割し、複数ステップが並列で読み込む。
+      例：ステップ１が id １- 1000、ステップ２が id 1001 - 2000 を処理する。
+      
+      findAllWithPaging(前方スキャン）との使い分け：
+      - findAllWithPaging ：順次処理、フルスキャン向け
+      - findByRange ：並列処理、範囲分割向け
+   -->
   <select id="findByIdRange" resultMap="expenseResultMap">
-  	SELECT 
+  	SELECT
   	    id,
   		applicant_id,
   		title,
@@ -206,6 +257,5 @@
   	WHERE id BETWEEN #{minId} AND #{maxId}
   	ORDER BY id ASC
   </select>
-  
   
   </mapper>

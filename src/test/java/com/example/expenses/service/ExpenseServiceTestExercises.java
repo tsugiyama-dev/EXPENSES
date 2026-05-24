@@ -21,7 +21,6 @@ import com.example.expenses.domain.Expense;
 import com.example.expenses.domain.ExpenseStatus;
 import com.example.expenses.dto.ExpenseAuditLog;
 import com.example.expenses.dto.response.ExpenseResponse;
-import com.example.expenses.event.ExpenseSubmittedEvent;
 import com.example.expenses.exception.BusinessException;
 import com.example.expenses.repository.ExpenseAuditLogMapper;
 import com.example.expenses.repository.ExpenseMapper;
@@ -64,7 +63,7 @@ public class ExpenseServiceTestExercises {
 				.thenReturn(saved);
 			when(expenseMapper.submitDraft(expenseId)).thenReturn(1);
 			
-			ExpenseResponse res = expenseService.submit(expenseId);
+			ExpenseResponse res = expenseService.submit(expenseId, userId);
 
 
 			//Then
@@ -91,16 +90,13 @@ public class ExpenseServiceTestExercises {
 				
 				//when
 				when(expenseMapper.findById(invalidExpenseId)).thenReturn(null);
-				when(authenticationContext.getCurrentUserId()).thenReturn(userId);
 				
-
 				//then
-				assertThatThrownBy(() -> expenseService.submit(invalidExpenseId))
+				assertThatThrownBy(() -> expenseService.submit(invalidExpenseId, userId))
 				.isInstanceOf(NoSuchElementException.class);
 				
 				verify(expenseMapper, never()).submitDraft(invalidExpenseId);
 				verify(auditLogMapper,never()).insert(any(ExpenseAuditLog.class)); 
-				verify(publisher, never()).publishEvent(any(ExpenseSubmittedEvent.class));
 			}
 			
 			@DisplayName("本人以外が提出した場合にBusinessExceptionをスロー")
@@ -112,7 +108,8 @@ public class ExpenseServiceTestExercises {
 				Long ownerId = 456L;
 				Long expenseId = 789L;
 				
-				Expense expense = new Expense(null,ownerId,null,null,null,null,null,null,null,null);
+				// status = DRAFT , applicantId = ownerId (≠ userId）
+				Expense expense = new Expense(null,ownerId,null,null,null,ExpenseStatus.DRAFT,null,null,null,null);
 				
 				//when
 				when(expenseMapper.findById(expenseId)).thenReturn(expense);
@@ -120,18 +117,15 @@ public class ExpenseServiceTestExercises {
 				
 				//Then
 				
-				assertThatThrownBy(() -> expenseService.submit(expenseId))
+				assertThatThrownBy(() -> expenseService.submit(expenseId, userId))
 				.isInstanceOf(BusinessException.class);
 				
 				verify(expenseMapper, never()).submitDraft(anyLong());
 				verify(auditLogMapper,never()).insert(any(ExpenseAuditLog.class)); 
-				verify(publisher, never()).publishEvent(any(ExpenseSubmittedEvent.class));
-				
-				
 			}
-			@DisplayName("既に提出済みの場合にIllegalStateExceptionをスロー")
+			@DisplayName("既に提出済みの場合にBusinessExceptionをスロー")
 			@Test
-			void すでに提出済みの場合にIllegalStateExceptionをスロー() {
+			void すでに提出済みの場合にBusinessExceptionをスロー() {
 				
 				//Given
 				Long userId = 123L;
@@ -142,18 +136,13 @@ public class ExpenseServiceTestExercises {
 				
 				//when
 				when(expenseMapper.findById(expenseId)).thenReturn(expense);
-				when(authenticationContext.getCurrentUserId()).thenReturn(userId);
-				
+		
 				//Then
-				
-				assertThatThrownBy(() -> expenseService.submit(expenseId))
+				assertThatThrownBy(() -> expenseService.submit(expenseId, userId))
 				.isInstanceOf(BusinessException.class);
 				
 				verify(expenseMapper, never()).submitDraft(anyLong());
 				verify(auditLogMapper,never()).insert(any(ExpenseAuditLog.class)); 
-				verify(publisher, never()).publishEvent(any(ExpenseSubmittedEvent.class));
-				
-				
 			}
 		}
 }

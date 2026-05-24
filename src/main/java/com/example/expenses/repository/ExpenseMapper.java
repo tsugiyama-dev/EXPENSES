@@ -199,6 +199,15 @@ public interface ExpenseMapper {
 			""")
 	List<Expense> findByPeriod(@Param("start")LocalDateTime start,@Param("end") LocalDateTime end);
 	
+	
+	/**
+	 * カーソルベース ページング（Spring Batch 向け）
+	 * PagingBatchConfigurationのMyBatisItemReaderから使用される
+	 * maxIdより小さいidのレコードを昇順で返す
+	 * バッチが前のページの最終idをmaxIdとして渡すことで順次フェッチする
+	 * @param maxId
+	 * @return List<Expense>
+	 */
 	List<Expense> findAllWithPaging(@Param("maxId") Long maxId);
 	
 	@Select("""
@@ -206,5 +215,10 @@ public interface ExpenseMapper {
 			""")
 	Long findMaxId();
 	
+	/*
+	 * ID 範囲指定による読み込み（Spring Batch 並列処理向け）
+	 * ParallelBatchConfigurationから使用される
+	 * データをId 範囲で分割し、複数スレッドが並列で処理する際に使う
+	 */
 	List<Expense> findByIdRange(@Param("minId")  Long minId, @Param("maxId") Long maxId);
 }
