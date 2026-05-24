@@ -21,7 +21,29 @@ Spring Boot 製の**経費申請アプリ**を段階的に拡張する学習プ�
 
 ---
 
-## フェーズの実装状況
+## ⚠️ 現在の状況（新規チャット開始時に必ず確認）
+
+**2つの計画が並行している。** 新規チャットを開始したら必ずユーザーに確認すること：
+- 「再学習テーマの続き（テーマ 3）を進めますか？」
+- 「新機能フェーズ（Phase 3/4）に戻りますか？」
+
+| 計画 | 内容 | 現在地 |
+|------|------|--------|
+| **A：新機能フェーズ** | Phase 3 → Phase 4 と段階的に新技術を追加 | Phase 3 をユーザーが実装中。完了報告待ち |
+| **B：再学習テーマ** | 既存実装を整理＋再実装して知識定着 | テーマ 2 完了、テーマ 3 が次 |
+
+**計画 A と B は独立している。** ユーザーの都合でいつでも切り替えてよい。
+
+### 計画 A に戻る場合
+- Phase 3 完了報告を受けたら `claude/phase4-custom-metrics` ブランチの内容を案内する
+- Phase 4 の内容：`ExpenseMetrics`（Counter）+ `MetricsConfig`（@Timed AOP）の実装
+
+### 計画 B を続ける場合
+- ユーザーが「テーマ X を始めます」と言ったらそのテーマのブランチを作成する
+
+---
+
+## 計画 A：新機能フェーズの状況
 
 | フェーズ | 内容 | ブランチ / 状態 |
 |---------|------|----------------|
@@ -31,18 +53,23 @@ Spring Boot 製の**経費申請アプリ**を段階的に拡張する学習プ�
 | Phase 4 | カスタムメトリクス（Counter + @Timed） | `claude/phase4-custom-metrics`（Phase 3 完了後に案内） |
 
 **ユーザーのベースブランチ：** `feature/observability`
-**Phase 3 完了後の次ステップ：** `claude/phase4-custom-metrics` の内容を案内する
+
+### Phase 4 ブランチの内容（先行作成済み）
+`claude/phase4-custom-metrics` に以下が実装済み：
+- `metrics/ExpenseMetrics.java`：作成・提出・承認・却下の Counter を MeterRegistry に登録
+- `config/MetricsConfig.java`：`@Timed` AOP を有効にする TimedAspect Bean
+- `service/ExpenseService.java`：`@Timed` + `incrementXxx()` 追加
+- Prometheus で確認：`expense_created_total`、`expense_submit_duration_seconds` など
 
 ---
 
-## 再学習・繰り返し実装計画
+## 計画 B：再学習・繰り返し実装テーマの状況
 
-### 背景と方針
-実装は進んでいるが「なんとなくわかっている」状態。
-「自分で書ける・説明できる」レベルにするため、
-**整理（コードを読める状態）＋ 実装（自分で書く）** を繰り返す。
+### 背景
+実装は進んでいるが「なんとなくわかっている」状態を解消するため、
+**整理（コードを読める状態）＋ 実装（自分で書く）** を繰り返す計画に切り替えた。
 
-Claude は完成版ブランチを作成 → ユーザーが読んで理解 → 自分のブランチで再実装。
+Claude が完成版ブランチを作成 → ユーザーが読んで理解 → 自分のブランチで再実装。
 
 ### テーマ一覧
 
@@ -50,7 +77,7 @@ Claude は完成版ブランチを作成 → ユーザーが読んで理解 → 
 |--------|------|----------------|------|
 | テーマ 1 | MyBatis XML 整理・ページング方式の説明 | `claude/refactor-theme1-mybatis` | ✅ 完了・ユーザー反映済み |
 | テーマ 2 | Spring Events + Kafka Bridge の一本化 | `claude/refactor-theme2-events` | ✅ 完了・ユーザー確認中 |
-| テーマ 3 | Kafka Analytics Consumer の実装 | 未作成 | ⬜ 次 |
+| テーマ 3 | Kafka Analytics Consumer の実装 | 未作成 | ⬜ **次のテーマ** |
 | テーマ 4 | MyBatis Cursor を使ったストリーミング | 未作成 | ⬜ 待機中 |
 | テーマ 5 | Redis + WebSocket 通知フローの整理 | 未作成 | ⬜ 待機中 |
 
@@ -156,15 +183,6 @@ ExpenseService.submit() [@Transactional]
 
 ---
 
-## 現在の重要な状態
-
-- **ユーザーの作業ブランチ：** `feature/observability`
-- **Phase 3 はユーザーが実装中** → 完了報告があるまで Phase 4 には触れない
-- **次に着手するテーマ：** テーマ 3（Kafka Analytics Consumer）
-  - ユーザーがテーマ 2 の内容を自分のブランチに反映したら開始
-
----
-
 ## よく使うコマンド
 
 ```bash
@@ -180,3 +198,4 @@ git checkout -b claude/refactor-themeX-name origin/feature/observability
 # コンパイル確認
 ./mvnw compile -q
 ```
+
