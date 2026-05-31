@@ -137,7 +137,7 @@ public class ExpenseViewController {
 	
 	@GetMapping("/search")
 	public String search(
-			@ModelAttribute("criteria") @Valid ExpenseSearchCriteria criteria,
+			@ModelAttribute @Valid ExpenseSearchCriteria criteria,
 			@RequestParam(defaultValue = "1") int page,
 			@RequestParam(defaultValue = "5") int pageSize,
 			@AuthenticationPrincipal LoginUser user,

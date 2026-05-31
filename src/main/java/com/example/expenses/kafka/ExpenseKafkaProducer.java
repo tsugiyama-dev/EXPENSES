@@ -20,7 +20,7 @@ public class ExpenseKafkaProducer {
 		kafkaTemplate.send(ExpenseTopics.EXPENSE_EVENT, key, message)
 		.whenComplete((result, ex) -> {
 			if(ex != null) {
-				log.error("Kafka publish failed expenseId={}",
+				log.error("Kafka publish failed expenseId={}, error={}",
 						message.getExpenseId(), ex);
 			}else {
 				log.debug("Kafka publish OK topic={}, offset={}, expenseId={}",

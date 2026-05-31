@@ -1,6 +1,7 @@
 package com.example.expenses.kafka;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -45,7 +46,7 @@ public class ExpenseKafkaNotificationConsumer {
 		notificationService.notifySubmitted(approverEmail, message.getExpenseId(), message.getTraceId());
 
 		Expense expense = expenseMapper.findById(message.getExpenseId());
-		if (expense == null) {
+		if (Objects.isNull(expense)) {
 			log.warn("通知スキップ. 経費がみつかりません: {}", message.getExpenseId());
 			return;
 		}
@@ -63,7 +64,7 @@ public class ExpenseKafkaNotificationConsumer {
 		notificationService.notifyApproved(applicantEmail, message.getExpenseId(), message.getTraceId());
 
 		Expense expense = expenseMapper.findById(message.getExpenseId());
-		if (expense == null) {
+		if (Objects.isNull(expense)) {
 			log.warn("通知スキップ. 経費がみつかりません: {}", message.getExpenseId());
 			return;
 		}
@@ -80,7 +81,7 @@ public class ExpenseKafkaNotificationConsumer {
 		notificationService.notifyRejected(applicantEmail, message.getExpenseId(), message.getReason(), message.getTraceId());
 
 		Expense expense = expenseMapper.findById(message.getExpenseId());
-		if (expense == null) {
+		if (Objects.isNull(expense)) {
 			log.warn("通知スキップ. 経費がみつかりません: {}", message.getExpenseId());
 			return;
 		}

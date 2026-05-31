@@ -2,6 +2,7 @@ package com.example.expenses.service;
 
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Set;
 
 import org.slf4j.MDC;
@@ -145,7 +146,7 @@ public class ExpenseService {
 		
 		//経費申請の取得
 		Expense current =expenseMapper.findById(expenseId);
-		if(current == null) {
+		if(Objects.isNull(current)) {
 			throw new NoSuchElementException("Expense not found: " + expenseId);
 		}
 		
@@ -167,10 +168,10 @@ public class ExpenseService {
 		/**
 		 * publishEvent() はここでSpringEventを発行する。approve()、reject()も同様。
 		 * BridgeListenerの＠TransactonalEventListener（AFTER_COMMIT)が
-		 * このトランザクションのコミット完了後に受け取り、KAFKAへ送信する。
+		 * このトランザクションのコミット完了後に受け取り、Kafkaへ送信する。
 		 * 
 		 * ＠EventListener（通常）はＮＧ：
-		 * トランザクション中に発火してＤＢがロールバックしてもKafkaにはメッセージが届く可能性がある
+		 * トランザクション中に発火してＤＢがロールバックしてもKafkaにはメッセージが届く
 		 */
 		eventPublisher.publishEvent(new ExpenseSubmittedEvent(expenseId, applicantId, traceId()));
 
@@ -188,7 +189,7 @@ public class ExpenseService {
 		Expense expense = expenseMapper.findById(expenseId);
 		
 		//存在確認
-		if(expense == null) {
+		if(Objects.isNull(expense)) {
 			throw new BusinessException("NOT_FOUND", "経費申請が見つかりません: EXPENSEID ：" + expenseId, traceId());
 		}
 		
