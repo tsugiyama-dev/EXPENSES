@@ -146,6 +146,31 @@ class NotificationManager {
 	}
 	
 	/**
+	 * ログイン後の未読通知をサーバーから取得して表示する
+	 * 表示後に既読にマークする
+	 */
+	loadPendingNotifications() {
+		fetch('/api/notifications/unread')
+			.then(res => res.json())
+			.then(notifications => {
+				if (notifications.length === 0) return;
+				notifications.forEach(n => {
+					this.displayNotification({
+						type: n.type,
+						expenseId: n.expenseId,
+						message: n.message,
+						title: '経費 #' + n.expenseId,
+						amount: '',
+						timestamp: n.createdAt
+					}, 'pending');
+				});
+				// 取得したものをまとめて既読にする
+				return fetch('/api/notifications/read', { method: 'PUT' });
+			})
+			.catch(err => console.error('未読通知の取得に失敗:', err));
+	}
+
+	/**
 	 * 切断
 	 */
 	disconnect() {
@@ -172,11 +197,12 @@ class NotificationManager {
 
 let notificationManager;
 
-// ページ読み込み時に自動接続
+// ページ読み込み時に自動接続 + 未読通知を取得
 document.addEventListener('DOMContentLoaded', () => {
 	notificationManager = new NotificationManager();
 	notificationManager.connect();
 	notificationManager.requestNotificationPermission();
+	notificationManager.loadPendingNotifications();
 });
 
 //ページ離脱時に切断

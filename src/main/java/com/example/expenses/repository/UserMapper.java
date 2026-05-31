@@ -46,6 +46,14 @@ public interface UserMapper {
 			LIMIT 1
 			""")
 	String findAnyApproverEmail();
+
+	@Select("""
+			SELECT id
+			FROM users
+			WHERE role LIKE CONCAT('%','ROLE_APPROVER','%')
+			LIMIT 1
+			""")
+	Long findAnyApproverId();
 	
 	@Select("""
 			SELECT * FROM users
