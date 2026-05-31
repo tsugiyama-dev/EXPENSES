@@ -104,7 +104,6 @@ spring-boot-devtools.properties
 *.sqlite3
 *.h2.db
 data/
-db/
 
 ###################
 # テスト・カバレッジ
