@@ -8,6 +8,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
 
+import jakarta.servlet.http.HttpServletResponse;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ContentDisposition;
@@ -27,6 +29,7 @@ import com.example.expenses.dto.request.ExpenseSearchCriteria;
 import com.example.expenses.export.ExcelExportImplService;
 import com.example.expenses.export.ExcelExportService;
 import com.example.expenses.export.PdfExportService;
+import com.example.expenses.service.ExpenseExportService;
 import com.example.expenses.service.ExpenseService;
 
 import lombok.RequiredArgsConstructor;
@@ -43,6 +46,7 @@ public class ExportController {
 	private final PdfExportService pdfExportService;
 	private final ExpenseService expenseService;
 	private final ExcelExportImplService excelExportImplService;
+	private final ExpenseExportService expenseExportService;
 	
 	@GetMapping("/excel/expenses")
 	public ResponseEntity<byte[]> exportExpensesToExcel(
@@ -157,7 +161,38 @@ public class ExportController {
 	}
 	
 	/**
-	 * 
+	 * Cursor を使った CSV ストリーミングエクスポート
+	 *
+	 * 既存の Excel/PDF エンドポイントとの違い：
+	 *   既存：byte[] を全件分メモリに構築してから返す
+	 *   ここ：response.getOutputStream() に1行ずつ書き出す
+	 *         → サービス側の Cursor と合わせて、件数に依存しない一定メモリで動作する
+	 *
+	 * 注意：サービスの @Transactional はこの同期呼び出しの間ずっと有効。
+	 *       StreamingResponseBody（別スレッド実行）を使うとトランザクションが
+	 *       切れて Cursor が閉じるため、ここでは同期書き出しにしている。
+	 */
+	@GetMapping("/csv/expenses/stream")
+	public void exportExpensesToCsvStream(
+			HttpServletResponse response,
+			@AuthenticationPrincipal LoginUser loginUser) throws IOException {
+
+		logger.info("経費一覧CSVストリーミングエクスポート開始：user={}", loginUser.getUsername());
+
+		String filename = generateFilename("経費一覧", "csv");
+
+		response.setContentType("text/csv");
+		response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+		response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
+				"attachment; filename*=UTF-8''" + encodeFilename(filename));
+
+		expenseExportService.exportAllAsCsvStream(response.getOutputStream());
+
+		logger.info("経費一覧CSVストリーミングエクスポート完了：user={}", loginUser.getUsername());
+	}
+
+	/**
+	 *
 	 */
 	private String generateFilename(String baseName, String extension) {
 		String date = LocalDateTime.now().format(FILE_DATE_FORMATTER);

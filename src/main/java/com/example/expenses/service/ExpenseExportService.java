@@ -1,5 +1,11 @@
 package com.example.expenses.service;
 
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -7,7 +13,9 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.ibatis.cursor.Cursor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.expenses.domain.Expense;
 import com.example.expenses.dto.request.ExpenseSearchCriteria;
@@ -45,7 +53,71 @@ public class ExpenseExportService {
 	}
 	
 	public Map<String, ExportStrategy> getToMap() {
-		
+
 		return this.strategies.stream().collect(Collectors.toMap(ExportStrategy::getFileExtension, Function.identity()));
+	}
+
+	/**
+	 * Cursor を使って全件をストリーミングで CSV に書き出す。
+	 *
+	 * 【既存の export() との違い】
+	 *   export()             : List<Expense> で全件をメモリにロード → byte[] を一括生成
+	 *   exportAllAsCsvStream(): Cursor で1行ずつ読み込み → OutputStream に逐次書き出し
+	 *                           → 件数がいくら増えてもメモリ消費はほぼ一定
+	 *
+	 * 【@Transactional(readOnly = true) が必須な理由】
+	 *   Cursor は SqlSession（= DB コネクション）が開いている間しか読み出せない。
+	 *   トランザクションがないと、メソッド呼び出し直後にセッションが閉じて
+	 *   「A Cursor is already closed」エラーになる。
+	 *   readOnly = true は更新を伴わないことを明示し、DB 側の最適化も効く。
+	 *
+	 * 【try-with-resources が必須な理由】
+	 *   Cursor をクローズしないと DB コネクションが返却されず、
+	 *   コネクションプールが枯渇する。
+	 */
+	@Transactional(readOnly = true)
+	public void exportAllAsCsvStream(OutputStream out) {
+
+		try (Cursor<Expense> cursor = expenseMapper.findAllAsStream();
+				BufferedWriter writer = new BufferedWriter(
+						new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
+
+			writer.write("id,applicantId,title,amount,currency,status,submittedAt");
+			writer.newLine();
+
+			// Cursor は Iterable<T> を実装しているので拡張 for で1行ずつ取り出せる
+			for (Expense e : cursor) {
+				writer.write(toCsvLine(e));
+				writer.newLine();
+			}
+
+			writer.flush();
+			log.info("CSV ストリーミングエクスポート完了: {} 件", cursor.getCurrentIndex() + 1);
+
+		} catch (IOException ex) {
+			throw new UncheckedIOException("CSV ストリーミング書き出しに失敗しました", ex);
+		}
+	}
+
+	private String toCsvLine(Expense e) {
+		return String.join(",",
+				String.valueOf(e.getId()),
+				String.valueOf(e.getApplicantId()),
+				escapeCsv(e.getTitle()),
+				e.getAmount() == null ? "" : e.getAmount().toPlainString(),
+				e.getCurrency() == null ? "" : e.getCurrency(),
+				e.getStatus() == null ? "" : e.getStatus().name(),
+				e.getSubmittedAt() == null ? "" : e.getSubmittedAt().toString());
+	}
+
+	/** カンマ・改行・ダブルクォートを含む値は "..." で囲み、内部の " は "" に変換する */
+	private String escapeCsv(String value) {
+		if (value == null) {
+			return "";
+		}
+		if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+			return "\"" + value.replace("\"", "\"\"") + "\"";
+		}
+		return value;
 	}
 }

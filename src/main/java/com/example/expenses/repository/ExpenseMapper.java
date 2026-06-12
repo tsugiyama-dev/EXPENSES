@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.apache.ibatis.annotations.Arg;
+import org.apache.ibatis.cursor.Cursor;
 import org.apache.ibatis.annotations.ConstructorArgs;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -221,4 +222,21 @@ public interface ExpenseMapper {
 	 * データをId 範囲で分割し、複数スレッドが並列で処理する際に使う
 	 */
 	List<Expense> findByIdRange(@Param("minId")  Long minId, @Param("maxId") Long maxId);
+
+	/**
+	 * 全件をストリーミングで読み込む（MyBatis Cursor）
+	 *
+	 * 【List との違い】
+	 *   List<Expense>   : 全行を一度にメモリへロードする（100万件 → OutOfMemory の危険）
+	 *   Cursor<Expense> : DB から1行ずつフェッチして処理する（メモリ消費は常に1行分）
+	 *
+	 * 【使い方の注意】
+	 *   1. Cursor は DB コネクションを掴んだままになるので、
+	 *      必ず try-with-resources でクローズすること
+	 *   2. トランザクション（SqlSession）が開いている間しか読み出せないため、
+	 *      呼び出し側のメソッドに @Transactional が必要
+	 *
+	 * 対応する SELECT は ExpenseMapper.xml の findAllAsStream（fetchSize 設定あり）
+	 */
+	Cursor<Expense> findAllAsStream();
 }
