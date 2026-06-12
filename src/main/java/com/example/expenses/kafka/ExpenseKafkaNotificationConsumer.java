@@ -12,6 +12,7 @@ import com.example.expenses.dto.NotificationMessage.NotificationType;
 import com.example.expenses.notification.NotificationService;
 import com.example.expenses.repository.ExpenseMapper;
 import com.example.expenses.repository.UserMapper;
+import com.example.expenses.service.PendingNotificationService;
 import com.example.expenses.websocket.RedisWebSocketPublisher;
 
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class ExpenseKafkaNotificationConsumer {
 	private final RedisWebSocketPublisher webSocketPublisher;
 	private final ExpenseMapper expenseMapper;
 	private final UserMapper userMapper;
+	private final PendingNotificationService pendingNotificationService;
 
 	@KafkaListener(topics = ExpenseTopics.EXPENSE_EVENT, groupId = "expenses-notification")
 	public void consume(ExpenseEventMessage message) {
@@ -51,6 +53,18 @@ public class ExpenseKafkaNotificationConsumer {
 			return;
 		}
 
+		// 承認者が未読の場合に備えて DB に保存
+		Long approverId = userMapper.findAnyApproverId();
+		if(Objects.nonNull(approverId)) {
+			pendingNotificationService.save(
+					approverId,
+					NotificationType.EXPENSE_SUBMITTED.name(),
+					message.getExpenseId(),
+					"提出された経費 #" + message.getExpenseId(),
+					expense.getTitle(),
+					expense.getAmount());
+		}
+		
 		String applicantEmail = userMapper.findEmailById(expense.getApplicantId());
 		webSocketPublisher.broadcast(buildMessage(
 				NotificationType.EXPENSE_SUBMITTED,
@@ -69,7 +83,16 @@ public class ExpenseKafkaNotificationConsumer {
 			return;
 		}
 
-		webSocketPublisher.sendToUser(message.getApplicantId(), buildMessage(
+		// 申請者が未読の場合に備えて DB に保存
+		pendingNotificationService.save(
+				message.getApplicantId(),
+				NotificationType.EXPENSE_APPROVED.name(),
+				message.getExpenseId(),
+				"承認された経費 #" + message.getExpenseId(),
+				expense.getTitle(),
+				expense.getAmount());
+		
+		webSocketPublisher.sendToUser(buildMessage(
 				NotificationType.EXPENSE_APPROVED,
 				expense,
 				applicantEmail,
@@ -86,7 +109,17 @@ public class ExpenseKafkaNotificationConsumer {
 			return;
 		}
 
-		webSocketPublisher.sendToUser(message.getApplicantId(), buildMessage(
+		// 申請者が未読の場合に備えて DB に保存
+		pendingNotificationService.save(
+				message.getApplicantId(),
+				NotificationType.EXPENSE_REJECTED.name(),
+				message.getExpenseId(),
+				"却下された経費 #" + message.getExpenseId(),
+				expense.getTitle(),
+				expense.getAmount());
+		
+		
+		webSocketPublisher.sendToUser(buildMessage(
 				NotificationType.EXPENSE_REJECTED,
 				expense,
 				applicantEmail,

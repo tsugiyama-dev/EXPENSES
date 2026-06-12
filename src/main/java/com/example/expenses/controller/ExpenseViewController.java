@@ -99,7 +99,6 @@ public class ExpenseViewController {
 			@AuthenticationPrincipal LoginUser user,
 			Model model) {
 		
-
 		PaginationResponse<ExpenseResponse> expenses = expenseService.search(
 				criteria,
 				page,
@@ -137,7 +136,7 @@ public class ExpenseViewController {
 	
 	@GetMapping("/search")
 	public String search(
-			@ModelAttribute @Valid ExpenseSearchCriteria criteria,
+			@ModelAttribute("criteria") @Valid ExpenseSearchCriteria criteria,
 			@RequestParam(defaultValue = "1") int page,
 			@RequestParam(defaultValue = "5") int pageSize,
 			@AuthenticationPrincipal LoginUser user,

@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class RedisNotificationMessage {
 
-	// WebSocket送信先 /topic/notification, /queue/1/notification 
+	// WebSocket送信先 /topic/notification, /queue/notification 
 	private String destination;
 	
 	private NotificationMessage payload;

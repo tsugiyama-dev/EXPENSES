@@ -1,6 +1,7 @@
 package com.example.expenses.listener;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
@@ -38,7 +39,7 @@ public class ExpenseWebSocketNotificationListener {
 		
 		var expense = expenseMapper.findById(event.getExpenseId());
 		
-	    if(expense == null) {
+	    if(Objects.isNull(expense)) {
 	    		log.warn("経費が見つかりません：{}", event.getExpenseId());
 	    		return;
 	    }		
@@ -81,7 +82,7 @@ public class ExpenseWebSocketNotificationListener {
 				.build();
 		
 		log.debug("WebSocket personal: APPROVED expenseId={}, applicantId={}", event.getExpenseId(), event.getApplicantId());
-		publisher.sendToUser(event.getApplicantId(), msg);
+		publisher.sendToUser(msg);
 	}
 	
 	@EventListener
@@ -107,6 +108,6 @@ public class ExpenseWebSocketNotificationListener {
 		
 		log.debug("WebSocket personal: REJECTED expenseId={}, applicantId={}", event.getExpenseId(), event.getApplicantId());
 
-		publisher.sendToUser(event.getApplicantId(), msg);
+		publisher.sendToUser(msg);
 	}
 }

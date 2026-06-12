@@ -52,5 +52,14 @@ public interface UserMapper {
 			WHERE id = #{id}
 			""")
 	User findById(Long actorId);
+	
+	@Select("""
+			SELECT id
+			FROM users
+			WHERE role LIKE CONCAT('%', 'ROLE_APPROVER', '%')
+			LIMIT 1
+			""")
+	Long findAnyApproverId();
+
 
 }

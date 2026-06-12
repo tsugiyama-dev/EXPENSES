@@ -21,7 +21,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 	public void configureMessageBroker(MessageBrokerRegistry registry) {
 		
 		registry.setApplicationDestinationPrefixes("/app");
-		
 		registry.enableSimpleBroker("/topic", "/queue");
+	
+		// 2026-06-08 追記: ユーザ宛の送信先のプレフィックスを明示的に設定
+		registry.setUserDestinationPrefix("/user");
 	}
 }

@@ -26,8 +26,7 @@ class NotificationManager {
 		this.updateConnectionStatus(true);
 		
 		// 個人通知を購読
-		this.stompClient.subscribe(`/user/queue/${this.userId}/notifications`,
-//		this.stompClient.subscribe(`/queue/${this.userId}/notifications`,
+		this.stompClient.subscribe('/user/queue/notifications', 
 			(message) => this.onPersonalNotification(message)
 		);
 		
@@ -74,7 +73,7 @@ class NotificationManager {
 		}else if( notification.type === 'EXPENSE_SUBMITTED') {
 			icon = '📝';
 		}
-		
+
 		notificationElement.innerHTML = `
 		<div class="notification-header">
 			<span class="notification-icon">${icon}</span>
@@ -145,6 +144,34 @@ class NotificationManager {
 		return 1;
 	}
 	
+  loadPendingNotifications() {
+    
+    const csrfToken = document.querySelector('meta[name="_csrf"]').getAttribute('content');
+    const csrfValue = document.querySelector('meta[name="_csrf_header"]').getAttribute('content');
+    
+    fetch('/api/notifications/unread')
+         .then(response => response.json())
+         .then(notifications => {
+              if(notifications.length === 0) return;
+                  notifications.forEach(n => {
+                       this.displayNotification({
+                             type: n.type,
+                             expenseId: n.expenseId,
+                             message: n.message,
+                             title: n.title,
+                             amount: n.amount,
+                             timestamp: n.createdAt
+                             }, 'pending');
+                  });
+                  return fetch('/api/notifications/read', {
+                    method: 'PUT',
+                  headers: {
+                    [csrfValue]: csrfToken
+                  }});
+         })
+         .catch(err => console.error('未読通知の取得に失敗:', err));
+  }
+  
 	/**
 	 * 切断
 	 */
@@ -177,6 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	notificationManager = new NotificationManager();
 	notificationManager.connect();
 	notificationManager.requestNotificationPermission();
+  notificationManager.loadPendingNotifications();
 });
 
 //ページ離脱時に切断

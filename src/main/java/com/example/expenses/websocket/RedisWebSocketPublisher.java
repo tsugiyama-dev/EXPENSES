@@ -23,8 +23,8 @@ public class RedisWebSocketPublisher {
 	}
 	
 	/** /queue/{userId}/notifications への個人あて送信 */
-	public void sendToUser(Long userId, NotificationMessage message) {
-		publish("/queue/" + userId + "/notifications", message);
+	public void sendToUser(NotificationMessage message) {
+		publish("/queue/notifications", message);
 		
 	}
 	

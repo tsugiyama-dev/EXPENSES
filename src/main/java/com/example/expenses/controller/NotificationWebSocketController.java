@@ -27,7 +27,8 @@ public class NotificationWebSocketController {
 	
 	public void sendNotificationToUser(Long userId, NotificationMessage message) {
 
-		String destination = "/queue/" + userId + "/notifications";
+		String destination = "/queue/notifications";
+//		String destination = "/queue/" + userId + "/notifications";
 		messagingTemplate.convertAndSendToUser(message.getApplicantEmail(), destination, message);
 		log.info("Notification sent to user {}: {}", userId, message);;
 		

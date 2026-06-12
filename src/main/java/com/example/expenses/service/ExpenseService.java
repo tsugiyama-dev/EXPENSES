@@ -167,10 +167,10 @@ public class ExpenseService {
 		
 		/**
 		 * publishEvent() はここでSpringEventを発行する。approve()、reject()も同様。
-		 * BridgeListenerの＠TransactonalEventListener（AFTER_COMMIT)が
+		 * BridgeListenerの @TransactionalEventListener (AFTER_COMMIT) が
 		 * このトランザクションのコミット完了後に受け取り、Kafkaへ送信する。
 		 * 
-		 * ＠EventListener（通常）はＮＧ：
+		 * @EventListenerはＮＧ：
 		 * トランザクション中に発火してＤＢがロールバックしてもKafkaにはメッセージが届く
 		 */
 		eventPublisher.publishEvent(new ExpenseSubmittedEvent(expenseId, applicantId, traceId()));
