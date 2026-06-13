@@ -214,7 +214,7 @@
   <select id="findAllWithPaging" resultMap="expenseResultMap">
   	SELECT
   	    id,
-  	    applicant}_id,
+  	    applicant_id,
   	    title,
   	    amount,
   	    currency,
@@ -243,7 +243,7 @@
    -->
   <select id="findByIdRange" resultMap="expenseResultMap">
   	SELECT
-  	    id,
+  	  id,
   		applicant_id,
   		title,
   		amount,

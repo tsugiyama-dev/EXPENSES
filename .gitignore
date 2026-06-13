@@ -148,3 +148,5 @@ docker-compose.override.yml
 
 # アップロードファイル
 uploads/
+input
+report-output
