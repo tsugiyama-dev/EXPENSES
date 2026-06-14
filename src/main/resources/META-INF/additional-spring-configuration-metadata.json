@@ -48,5 +48,15 @@
     "name": "spring.mvc.throws-exception-if-no-handler-found",
     "type": "java.lang.String",
     "description": "A description for 'spring.mvc.throws-exception-if-no-handler-found'"
+  },
+  {
+    "name": "app.redis.we-channel",
+    "type": "java.lang.String",
+    "description": "A description for 'app.redis.we-channel'"
+  },
+  {
+    "name": "app.redis.ws-channel",
+    "type": "java.lang.String",
+    "description": "A description for 'app.redis.ws-channel'"
   }
 ]}

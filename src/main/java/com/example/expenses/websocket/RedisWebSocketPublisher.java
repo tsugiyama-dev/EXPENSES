@@ -1,5 +1,6 @@
 package com.example.expenses.websocket;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -13,25 +14,26 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class RedisWebSocketPublisher {
 
-	static final String CHANNEL = "ws-notifications";
+	@Value("${app.redis.ws-channel}")
+	private String channel;
 	
-	private final RedisTemplate<String, RedisNotificationMessage> redisTemplate;
+	private final RedisTemplate<String, NotificationMessage> redisTemplate;
 	
 	/** /topic/notifications へブロードキャスト */
 	public void broadcast(NotificationMessage message) {
 		publish("/topic/notifications", message);
 	}
 	
-	/** /queue/{userId}/notifications への個人あて送信 */
+	/** /queue/notifications への個人あて送信 */
 	public void sendToUser(NotificationMessage message) {
 		publish("/queue/notifications", message);
 		
 	}
 	
 	private void publish(String destination, NotificationMessage message) {
-		var wrapper = new RedisNotificationMessage(destination, message);
+		message.setDestination(destination);
 		log.debug("Redis publish: destination={}, expenseId={}", destination, message.getExpenseId());
-		redisTemplate.convertAndSend(CHANNEL, wrapper);
+		redisTemplate.convertAndSend(channel, message);
 	}
 
 		
