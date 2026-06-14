@@ -1,5 +1,6 @@
 package com.example.expenses.websocket;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -28,6 +29,8 @@ import com.example.expenses.dto.NotificationMessage;
 @Configuration
 public class RedisConfig {
 
+	@Value("${app.redis.ws-channel}")
+	private String wsChannel;
 	
 	/**
 	 * NotificationMessage を JSON でやり取りする RedisTemplate。
@@ -61,7 +64,7 @@ public class RedisConfig {
 		
 		var container = new RedisMessageListenerContainer();
 		container.setConnectionFactory(connectionFactory);
-		container.addMessageListener(messageListenerAdapter, new ChannelTopic("wsChannel"));
+		container.addMessageListener(messageListenerAdapter, new ChannelTopic(wsChannel));
 		
 		return container;
 	}
