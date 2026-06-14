@@ -5,6 +5,16 @@ class NotificationManager {
 		this.stompClient = null;
 		this.isConnected = false;
 		this.userId = this.getCurrentUserId();
+		/*
+		 * 指数バックオフ用の再接続待機時間（ミリ秒）。
+		 * 接続失敗のたびに 2倍になり、最大 30秒で頭打ちにする。
+		 * 接続成功したら 1秒にリセットする。
+		 *
+		 * 固定5秒との違い：
+		 *   固定5秒       : サーバー障害が長引くと5秒ごとに大量の再接続が殺到しサーバーを圧迫する
+		 *   指数バックオフ : 時間が経つほど間隔が広がるのでサーバー側の負荷を抑えられる
+		 */
+		this.retryDelay = 1000;
 	}
 	
 	connect() {
@@ -23,6 +33,7 @@ class NotificationManager {
 	onConnected(frame) {
 		console.log('WebSocket接続成功:', frame);
 		this.isConnected = true;
+		this.retryDelay = 1000; // 接続成功したらバックオフをリセット
 		this.updateConnectionStatus(true);
 		
 		// 個人通知を購読
@@ -113,11 +124,13 @@ class NotificationManager {
 		console.error('WebSocketエラー:', error);
 		this.isConnected = false;
 		this.updateConnectionStatus(false);
-		
+
+		// 指数バックオフ: 1s → 2s → 4s → 8s → 16s → 30s（上限）
+		console.log(`WebSocket再接続を ${this.retryDelay}ms 後に試みます...`);
 		setTimeout(() => {
-			console.log('WebSocket再接続を試みます...');
 			this.connect();
-		}, 5000);
+		}, this.retryDelay);
+		this.retryDelay = Math.min(this.retryDelay * 2, 30000);
 	}
 	
 	
