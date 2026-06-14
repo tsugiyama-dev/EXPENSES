@@ -258,4 +258,37 @@
   	ORDER BY id ASC
   </select>
   
+  <!-- 
+    【Cursorによるストリーミング読み込み】
+    
+    Java側の戻り値はCursor<Expense>（org.apache.ibatis.cursor.Cursor)
+    List と違い、全行をメモリに乗せずに1行ずつ処理できる。
+    
+    fetchSize="-2147483648"(=Integer.MIN_VALUE)の意味：
+      MySQL の JDBC ドライバは通常、結果セット全体をドライバ内に
+      バッファリングする（つまりCursor にしてもメモリを食う）
+      fetchSize に Integer.MIN_VALUE を指定したときだけ
+      「行単位ストリーミングモード」に切替わり、
+      1行ずつサーバーから取り出すようになる（MySQL固有の仕様)。
+      
+      PostgreSQL の場合はfetchSize="100" のような正の値でカーソルが効く。
+  
+  
+   -->
+  <select id="findAllAsStream" resultMap="expenseResultMap" fetchSize="-2147483648">
+    SELECT
+        id,
+        applicant_id,
+        title,
+        amount,
+        currency,
+        status,
+        submitted_at,
+        created_at,
+        updated_at,
+        version
+    FROM expenses
+    ORDER BY id ASC
+  </select>
+  
   </mapper>
