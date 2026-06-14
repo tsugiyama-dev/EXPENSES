@@ -166,8 +166,14 @@
 		<dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-kafka</artifactId>
+		</dependency>
 
-    </dependency>
+		<!-- @RetryableTopic / DLT サポートに必要 -->
+		<dependency>
+			<groupId>org.springframework.retry</groupId>
+			<artifactId>spring-retry</artifactId>
+			<version>2.0.11</version>
+		</dependency>
 
 		<!-- Phase 3: Observability -->
 		<dependency>
