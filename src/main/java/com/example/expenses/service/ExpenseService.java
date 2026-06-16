@@ -6,6 +6,8 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.slf4j.MDC;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,58 +31,43 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
-@RequiredArgsConstructor//Lombokが全フィールドのコンストラクタを自動生成
+@RequiredArgsConstructor
 @Slf4j
 public class ExpenseService {
 
 	private final ExpenseMapper expenseMapper;
 	private final ExpenseAuditLogMapper auditLogMapper;
 	private final AuthenticationContext authenticationContext;
-	
+
 	private final ApplicationEventPublisher eventPublisher;
 	private static final Set<String> ALLOWED_SORTS = Set.of("created_at", "updated_at", "submitted_at", "amount", "id");
-	
-	/**
-	 * @param req
-	 * @return 作成された経費申請の情報を含むExpenseResponseオブジェクト
-	 */
+
 	@Transactional
 	public ExpenseResponse create(ExpenseCreateRequest req) {
 
-		//認証サービスから現在のユーザーＩＤを取得
 		Long currentUserId = authenticationContext.getCurrentUserId();
-		
-		//エンティティを作成
+
 		Expense expense = Expense.create(
 				currentUserId,
 				req.title(),
 				req.amount(),
 				req.currency());
 
-		
-		//データベースに保存
 		expenseMapper.insert(expense);
 
-		
-        //監査ログを記録
 		auditLogMapper.insert(ExpenseAuditLog.create(
 				expense.getId(),
 				currentUserId,
 				traceId()
 		));
 
-		
 		return ExpenseResponse.toResponse(expense);
 	}
-	/**
-	 * 経費の全件取得
-	 * @param criteria
-	 * @return 経費の一覧
-	 */
+
 	public List<Expense> getAllExpenses(ExpenseSearchCriteria criteria, Long userId) {
 
 		ExpenseSearchCriteriaEntity e = new ExpenseSearchCriteriaEntity();
-		
+
 		if(authenticationContext.isOwnerOrApprover(userId)) {
 			e.setTitle(criteria.title());
 			e.setAmountMax(criteria.amountMax());
@@ -92,19 +79,30 @@ public class ExpenseService {
 		}
 		return expenseMapper.findAll(e);
 	}
-	
+
+	/*
+	 * キャッシュ対象：経費の1件取得。
+	 *
+	 * @Cacheable("expenses") の動作：
+	 *   1. Redis に "expenses::1"（キャッシュ名::キー）が存在する → DB を叩かずにキャッシュを返す
+	 *   2. キャッシュが存在しない（またはTTL切れ） → DB から取得して Redis に保存してから返す
+	 *
+	 * key = "#expenseId" はSpEL（Spring Expression Language）。
+	 *   メソッド引数の名前をそのままキャッシュキーに使う。
+	 *   → Redis のキーは "expenses::1", "expenses::2" ... のようになる。
+	 */
+	@Cacheable(cacheNames = "expenses", key = "#expenseId")
 	public Expense getExpense(Long expenseId) {
+		log.debug("[Cache MISS] DB から取得: expenseId={}", expenseId);
 		return expenseMapper.findById(expenseId);
 	}
-	
-	//検索条件に基づいて経費申請のリストを取得し、ページネーションされたレスポンスを返す
+
 	public PaginationResponse<ExpenseResponse> search(
 			ExpenseSearchCriteria criteria,
 			int currentPage,
 			int pageSize) {
 		Long userId = authenticationContext.getCurrentUserId();
-		
-		
+
 		ExpenseSearchCriteriaEntity e = new ExpenseSearchCriteriaEntity();
 		e.setTitle(criteria.title());
 		e.setApplicantId(criteria.applicantId());
@@ -113,225 +111,191 @@ public class ExpenseService {
 		e.setAmountMin(criteria.amountMin());
 		e.setSubmittedFrom(criteria.submittedFrom());
 		e.setSubmittedTo(criteria.submittedTo());
-		
-		//ROLE_APPROVER以外は全て見れない		
+
 		if(!authenticationContext.isApprover()) {
 			e.setApplicantId(userId);
 		}
-	
-		
+
 		String orderBy  = normalizedOrderBy(criteria.sort());
 		String direction =  normalizedDirection(criteria.sort());
 
 		int offset = (currentPage - 1) * pageSize;
-		
+
 		long cnt = expenseMapper.count(e);
-		
+
 		int  totalPage = (int)Math.ceil((double) cnt / pageSize);
-		
+
 		List<Integer> pageList = pageList(currentPage, totalPage, 5);
-		
+
 		List<ExpenseResponse> items = ExpenseResponse.toListResponse(
 				expenseMapper.search(e, orderBy, direction, pageSize, offset));
-		
+
 		return new PaginationResponse<>(items, currentPage, pageSize, (int)cnt, totalPage, pageList);
 	}
-	
-	/**
-	 * 経費提出
+
+	/*
+	 * 提出・承認・却下でステータスが変わるため、キャッシュを削除する。
+	 *
+	 * @CacheEvict の動作：
+	 *   メソッドの実行後（DB 更新後）に Redis から "expenses::{expenseId}" のエントリを削除。
+	 *   次に getExpense() が呼ばれると @Cacheable が DB から再取得してキャッシュを作り直す。
+	 *
+	 * beforeInvocation = false（デフォルト）：
+	 *   メソッド実行「後」に削除 → 例外でロールバックした場合はキャッシュを残す（正しい挙動）。
+	 *   true にすると実行「前」に削除 → ロールバックしてもキャッシュは消える（古いデータが消えた状態になる）。
 	 */
 	@Transactional
+	@CacheEvict(cacheNames = "expenses", key = "#expenseId")
 	public ExpenseResponse submit(Long expenseId, Long applicantId) {
-		
-		
-		//経費申請の取得
-		Expense current =expenseMapper.findById(expenseId);
+
+		Expense current = expenseMapper.findById(expenseId);
 		if(Objects.isNull(current)) {
 			throw new NoSuchElementException("Expense not found: " + expenseId);
 		}
-		
+
 		if(!current.canBeSubmittedBy(applicantId)) {
 			throw new BusinessException("INVALID_STATUS_TRANSITION", "ステータスもしくは本人ではないため提出できません");
 		}
-		
-		//提出処理
+
 		int updated = expenseMapper.submitDraft(expenseId);
-		
+
 		if(updated == 0) {
-			throw new BusinessException("INVALID_STATUS_TRANSITION",
-					"下書き以外提出できません");
+			throw new BusinessException("INVALID_STATUS_TRANSITION", "下書き以外提出できません");
 		}
-		
-		//監査ログ登録
+
 		auditLogMapper.insert(ExpenseAuditLog.createDraft(expenseId, applicantId, traceId()));
-		
-		/**
-		 * publishEvent() はここでSpringEventを発行する。approve()、reject()も同様。
-		 * BridgeListenerの @TransactionalEventListener (AFTER_COMMIT) が
-		 * このトランザクションのコミット完了後に受け取り、Kafkaへ送信する。
-		 * 
-		 * @EventListenerはＮＧ：
-		 * トランザクション中に発火してＤＢがロールバックしてもKafkaにはメッセージが届く
-		 */
+
 		eventPublisher.publishEvent(new ExpenseSubmittedEvent(expenseId, applicantId, traceId()));
 
 		return ExpenseResponse.toResponse(expenseMapper.findById(expenseId));
 	}
-	
-	/**
-	 * 経費承認
-	 */
-	@Transactional
-	public ExpenseResponse approve(long expenseId, int version, Long approverId) {
-		
 
-		//経費取得
+	@Transactional
+	@CacheEvict(cacheNames = "expenses", key = "#expenseId")
+	public ExpenseResponse approve(long expenseId, int version, Long approverId) {
+
 		Expense expense = expenseMapper.findById(expenseId);
-		
-		//存在確認
+
 		if(Objects.isNull(expense)) {
 			throw new BusinessException("NOT_FOUND", "経費申請が見つかりません: EXPENSEID ：" + expenseId, traceId());
 		}
-		
+
 		if(!expense.canBeApproved()) {
-			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は承認できません", traceId());	
+			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は承認できません", traceId());
 		}
-		
-		//二重更新チェック
-		if(expense.getVersion()!= version) {
+
+		if(expense.getVersion() != version) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId());
 		}
-		//承認処理
+
 		int updated = expenseMapper.approve(expenseId, version);
 		if(updated == 0) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId());
 		}
-		
-		//監査ログ登録
-		auditLogMapper.insert(ExpenseAuditLog.createApprove(expenseId, approverId, traceId()));
-		
-		eventPublisher.publishEvent(
-				new ExpenseApprovedEvent(expenseId, approverId, expense.getApplicantId(),traceId()));
 
-		//更新後の経費を取得して返す
+		auditLogMapper.insert(ExpenseAuditLog.createApprove(expenseId, approverId, traceId()));
+
+		eventPublisher.publishEvent(
+				new ExpenseApprovedEvent(expenseId, approverId, expense.getApplicantId(), traceId()));
+
 		return ExpenseResponse.toResponse(expenseMapper.findById(expenseId));
-		
-		
 	}
-	
-	/**
-	 * 経費却下
-	 */
+
 	@Transactional
+	@CacheEvict(cacheNames = "expenses", key = "#expenseId")
 	public ExpenseResponse reject(long expenseId, String reason, int version, Long rejectorId) {
-		
+
 		String traceId = traceId();
-		//経費取得
-		Expense expense = expenseMapper.findById(expenseId);	
-		//存在確認
+
+		Expense expense = expenseMapper.findById(expenseId);
+
 		if(expense == null) {
 			throw new BusinessException("NOT_FOUND", "経費申請が見つかりません: EXPENSEID ：" + expenseId, traceId);
 		}
-		//ビジネスルールチェック
+
 		if(!expense.canBeRejected()) {
-			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は却下できません", traceId);	
+			throw new BusinessException("INVALID_STATUS_TRANSITION", "提出済み以外は却下できません", traceId);
 		}
-		//二重更新チェック
+
 		if(expense.getVersion() != version) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId);
 		}
-		//却下処理
+
 		int updated = expenseMapper.reject(expenseId, version);
-		
-		
+
 		if(updated == 0) {
 			throw new BusinessException("CONCURRENT_MODIFICATION", "他のユーザに更新されています", traceId);
 		}
 
-		//監査ログ登録
 		auditLogMapper.insert(ExpenseAuditLog.createReject(expenseId, rejectorId, traceId, reason));
-		
+
 		eventPublisher.publishEvent(
 				new ExpenseRejectedEvent(expenseId, rejectorId, traceId, expense.getApplicantId(), reason));
-		
-		//更新後の経費を取得して返す
+
 		return ExpenseResponse.toResponse(expenseMapper.findById(expenseId));
 	}
-	
-	
+
+
 	private String traceId() {
 		String tid = MDC.get(TraceIdFilter.TRACE_ID_KEY);
 		return tid == null ? "" : tid;
 	}
-	
+
 	private String normalizedOrderBy(String sort) {
-		
+
 		if(sort == null || sort.isBlank()) {
 			return "created_at";
 		}
-		
+
 		String[] parts = sort.split(",");
-		
 		String key = parts[0].trim();
-		
+
 		String column = switch(key) {
-		case "created_at":
-			yield "created_at";
-		case "updated_at":
-			yield "updated_at";
-		case "submitted_at":
-			yield "submitted_at";
-		case "amount":
-			yield "amount";
-		case "id":
-			yield "id";
-		default :
-			yield "created_at";
+		case "created_at" -> "created_at";
+		case "updated_at" -> "updated_at";
+		case "submitted_at" -> "submitted_at";
+		case "amount" -> "amount";
+		case "id" -> "id";
+		default -> "created_at";
 		};
-		
+
 		if(!ALLOWED_SORTS.contains(column)) {
 			return "created_at";
 		}
 		return column;
-		
-		
-	}	
-	
+	}
+
 	private String normalizedDirection(String sort) {
-		
+
 		if(sort == null || sort.isBlank()) return "DESC";
-		
+
 		String[] parts = sort.split(",");
-		
+
 		if(parts.length < 2) return "DESC";
 		String dir = parts[1].trim();
-		
+
 		return "asc".equalsIgnoreCase(dir) ? "ASC" : "DESC";
 	}
-	
+
 	private List<Integer> pageList(int currentPage, int totalPage, int displayPage) {
-		
+
 		int start = 0;
 		int end = 0;
-		
+
 		if(totalPage < displayPage) {
 			start = 1;
 			end = totalPage;
-		}else {
-			
-			start = Math.max(1, currentPage -2);
+		} else {
+			start = Math.max(1, currentPage - 2);
 			end = Math.min(totalPage, start + displayPage - 1);
-			
+
 			if(end == totalPage) {
 				start = end - displayPage + 1;
 			}
 		}
 
-		return  java.util.stream.IntStream.rangeClosed(start, end)
+		return java.util.stream.IntStream.rangeClosed(start, end)
 				.boxed()
 				.toList();
 	}
-	
-	
-	
 }
