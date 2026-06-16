@@ -3,7 +3,14 @@ package com.example.expenses.kafka;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.kafka.annotation.BackOff;
+import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.annotation.RetryableTopic;
+import org.springframework.kafka.retrytopic.TopicSuffixingStrategy;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
 import com.example.expenses.domain.Expense;
@@ -29,6 +36,10 @@ public class ExpenseKafkaNotificationConsumer {
 	private final UserMapper userMapper;
 	private final PendingNotificationService pendingNotificationService;
 
+	@RetryableTopic(
+			attempts = "4",
+			backOff = @BackOff(delay = 1000, multiplier = 2.0),
+			topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE)
 	@KafkaListener(topics = ExpenseTopics.EXPENSE_EVENT, groupId = "expenses-notification")
 	public void consume(ExpenseEventMessage message) {
 		try {
@@ -40,6 +51,7 @@ public class ExpenseKafkaNotificationConsumer {
 		} catch (Exception ex) {
 			log.error("Kafka notification handling failed. type={}, expenseId={}",
 					message.getEventType(), message.getExpenseId(), ex);
+			throw ex;
 		}
 	}
 
@@ -55,7 +67,7 @@ public class ExpenseKafkaNotificationConsumer {
 
 		// 承認者が未読の場合に備えて DB に保存
 		Long approverId = userMapper.findAnyApproverId();
-		if(Objects.nonNull(approverId)) {
+		if (Objects.nonNull(approverId)) {
 			pendingNotificationService.save(
 					approverId,
 					NotificationType.EXPENSE_SUBMITTED.name(),
@@ -71,6 +83,18 @@ public class ExpenseKafkaNotificationConsumer {
 				expense,
 				applicantEmail,
 				"提出された経費 #" + message.getExpenseId()));
+	}
+	
+	@DltHandler
+	public void handleDlt(
+			ConsumerRecord<String, ExpenseEventMessage> record,
+			@Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+			@Header(KafkaHeaders.EXCEPTION_MESSAGE)String exceptionMessage) {
+		
+		ExpenseEventMessage message = record.value();
+		log.error("[DLT] 通知処理が最終的に失敗しました。手動確認が必要です"
+				+ "topic={}, type={}, expenseId={}, cause={}",
+				topic, message.getEventType(), message.getExpenseId(), exceptionMessage);
 	}
 
 	private void handleApproved(ExpenseEventMessage message) {
@@ -109,7 +133,6 @@ public class ExpenseKafkaNotificationConsumer {
 			return;
 		}
 
-		// 申請者が未読の場合に備えて DB に保存
 		pendingNotificationService.save(
 				message.getApplicantId(),
 				NotificationType.EXPENSE_REJECTED.name(),
@@ -117,7 +140,6 @@ public class ExpenseKafkaNotificationConsumer {
 				"却下された経費 #" + message.getExpenseId(),
 				expense.getTitle(),
 				expense.getAmount());
-		
 		
 		webSocketPublisher.sendToUser(buildMessage(
 				NotificationType.EXPENSE_REJECTED,
