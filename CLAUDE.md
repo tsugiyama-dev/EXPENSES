@@ -30,7 +30,8 @@ Spring Boot 製の**経費申請アプリ**を段階的に拡張する学習プ�
 | 計画 | 内容 | 現在地 |
 |------|------|--------|
 | **A：新機能フェーズ** | Phase 3 → Phase 4 と段階的に新技術を追加 | Phase 3 をユーザーが実装中。完了報告待ち |
-| **B：再学習テーマ** | 既存実装を整理＋再実装して知識定着 | ✅ **テーマ 1〜5（+3.5）すべて完了** |
+| **B 第1弾：再学習テーマ** | 既存実装を整理＋再実装して知識定着 | ✅ **テーマ 1〜5（+3.5）すべて完了** |
+| **B 第2弾：Kafka/Redis/WS 深化** | 復習＋新機能ハイブリッド | テーマ 6・7 完了、テーマ 8 未着手 |
 
 **計画 A と B は独立している。** ユーザーの都合でいつでも切り替えてよい。
 
@@ -40,7 +41,8 @@ Spring Boot 製の**経費申請アプリ**を段階的に拡張する学習プ�
 
 ### 計画 B について
 - テーマ 1〜5 と割込みのテーマ 3.5 はすべて完了・ユーザー反映済み
-- 新しい学習テーマを追加したい場合はユーザーの要望に応じて計画を立てる
+- 第2弾（テーマ 6〜8）も進行中。テーマ 6（Kafka DLT）・テーマ 7（Redis キャッシュ）完了済み
+- テーマ 8（WebSocket セキュリティ）は未着手
 
 ---
 
@@ -82,6 +84,14 @@ Claude が完成版ブランチを作成 → ユーザーが読んで理解 → 
 | テーマ 3.5 | オフライン通知の DB 永続化（割込み） | `claude/feature-pending-notifications` | ✅ 完了・反映済み |
 | テーマ 4 | MyBatis Cursor を使ったストリーミング | `claude/refactor-theme4-cursor` | ✅ 完了・反映済み |
 | テーマ 5 | Redis + WebSocket 通知フローの整理 | `claude/refactor-theme5-redis-ws` | ✅ 完了・反映済み |
+
+### B 第2弾：Kafka/Redis/WebSocket 深化テーマ一覧
+
+| テーマ | 内容 | Claude ブランチ（模範実装） | 状態 |
+|--------|------|--------------------------|------|
+| テーマ 6 | Kafka Dead Letter Topic（`@RetryableTopic` + `@DltHandler`） | `claude/refactor-theme6-kafka-dlt` | ✅ 完了・反映済み |
+| テーマ 7 | Redis キャッシュ（`@Cacheable` / `@CacheEvict` / `RedisCacheManager`） | `claude/refactor-theme7-redis-cache` | ✅ 完了・反映済み |
+| テーマ 8 | WebSocket セキュリティ（STOMP `ChannelInterceptor`） | 未作成 | 未着手 |
 
 ---
 
@@ -203,6 +213,47 @@ DB に保存しておきログイン時に表示する。
 - `convertAndSend`（/topic ブロードキャスト）と `convertAndSendToUser`（/queue 個人宛）の違い
 - 注意：`RedisConfig` の `ChannelTopic(wsChannel)` を文字列リテラル `"wsChannel"` と書くと
   Publisher のチャネルと不一致になり通知が届かなくなる（実際に発生したバグ）
+
+---
+
+### ✅ テーマ 6：Kafka Dead Letter Topic（完了）
+**ブランチ：** `claude/refactor-theme6-kafka-dlt`
+
+変更内容：
+- `pom.xml`：`spring-retry 2.0.11` を追加（`@RetryableTopic` の依存）
+- `ExpenseKafkaNotificationConsumer`：
+  - `consume()` の例外を飲み込む `try-catch` を削除（例外が伝播しないと DLT にルーティングされない）
+  - `@RetryableTopic` を追加：4回試行、1s → 2s → 4s → 8s のバックオフ、`SUFFIX_WITH_INDEX_VALUE` でトピック名自動生成
+  - `@DltHandler` を追加：最終失敗時に `[DLT]` ログを出力して手動確認を促す
+
+学習ポイント：
+- `@BackOff` は `org.springframework.kafka.annotation.BackOff`（spring-retry の `@Backoff` ではない）
+- 例外を `catch` して再スローしないと DLT にルーティングされない
+- 自動生成トピック：`expense-events-retry-0`, `-retry-1`, `-retry-2`, `.DLT`
+- `groupId` が同じなら Partition を分散処理、異なれば同じメッセージをそれぞれ独立して受け取る
+
+---
+
+### ✅ テーマ 7：Redis キャッシュ（完了）
+**ブランチ：** `claude/refactor-theme7-redis-cache`
+
+変更内容：
+- `CacheConfig.java`（新規）：`@EnableCaching` + `RedisCacheManager` Bean を定義
+- `ExpenseService.java`：
+  - `getExpense()` に `@Cacheable(cacheNames = "expenses", key = "#expenseId")` を追加
+  - `submit()` / `approve()` / `reject()` に `@CacheEvict(cacheNames = "expenses", key = "#expenseId")` を追加
+
+学習ポイント：
+- **`GenericJacksonJsonRedisSerializer`（Jackson 3）を使う**
+  - `GenericJackson2JsonRedisSerializer` は Spring Boot 4.x で deprecated → `LocalDateTime` でランタイムエラー
+- **`enableDefaultTyping(typeValidator)` 必須**
+  - ないと `LinkedHashMap` が返り `ClassCastException`（@class 型情報が JSON に埋め込まれないため）
+  - `PolymorphicTypeValidator` で `com.example.expenses.*` と `java.*` に限定（セキュリティ）
+- **`transactionAware()` 必須**
+  - ないと `@CacheEvict`（beforeInvocation=false）がコミット前に実行され、
+    直後の別スレッドが古いデータを再キャッシュするレースコンディションが発生する
+- **`@EnableCaching` 必須**
+  - ないと `@Cacheable` / `@CacheEvict` が Spring AOP に無視される
 
 ---
 
