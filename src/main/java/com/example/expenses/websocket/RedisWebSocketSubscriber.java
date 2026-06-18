@@ -40,7 +40,7 @@ public class RedisWebSocketSubscriber {
 				  destination,
 				  message.getExpenseId());
 		
-		if(message.getDestination().startsWith("/topic")) {
+		if(destination.startsWith("/topic")) {
 			
 			// 全体向けブロードキャスト
 			messagingTemplate.convertAndSend(destination, message);
@@ -48,7 +48,7 @@ public class RedisWebSocketSubscriber {
 			//　個人あて(/queue/notifications) -> /user/{email}/queue/notifications へ転送
 			messagingTemplate.convertAndSendToUser(
 					message.getApplicantEmail(),
-					message.getDestination(), 
+					destination, 
 					message);
 			
 		}
