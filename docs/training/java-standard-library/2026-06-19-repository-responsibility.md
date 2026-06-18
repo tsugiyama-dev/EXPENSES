@@ -84,12 +84,12 @@ MyBatis MapperはDBアクセスの実装詳細であり、ServiceがSQLや永続
 
 ### 作業概要
 
-- ServiceとRepositoryの責務分割をJava標準ライブラリで再現した
-- `ExpenseRepository` interfaceを作成し、保存先の詳細をServiceから分離した
-- `ConcurrentHashMap` を使ったインメモリRepositoryを作成した
-- `Optional` を使い、存在しないデータの扱いを明示した
-- `expenses` のMapper依存を整理するための観点を洗い出した
+- Javaの `interface` を使い、処理の利用側と実装側を分ける方法を学習した
+- `Map` と `ConcurrentHashMap` を使い、インメモリの保存処理を実装した
+- `Optional` を使い、値が存在しないケースを明示的に扱う方法を確認した
+- Service相当のクラスとRepository相当のクラスで責務を分ける練習を行った
+- 実装クラスを差し替えやすくするための依存関係の持たせ方を整理した
 
 ### 作業所感
 
-Repositoryをinterfaceとして切ると、Serviceの関心が業務手順に集中することが分かった。実務ではMyBatis Mapperを直接使う方が短く書けるが、Serviceのテストや将来の保存先変更を考えると、境界を明確にする価値がある。特に`ExpenseService`は状態遷移、監査ログ、イベント発行、検索処理が混ざっているため、まず保存処理との境界を意識して読むことが重要だと感じた。
+`interface` を使うと、呼び出し側が具体的な保存方法を知らなくても処理を進められることが分かった。`Map` による簡易実装でも、責務を分けることでテストしやすい構成を作れる。Javaの基本構文だけで抽象化の効果を確認できたため、今後は処理を実装する前に「何をinterfaceとして切り出せるか」を意識したい。
