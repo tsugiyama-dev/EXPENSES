@@ -108,12 +108,12 @@ Kafkaは分散されたProducer-Consumerの仕組みとして理解できる。S
 
 ### 作業概要
 
-- `BlockingQueue` を使って通知キューを実装した
-- ProducerとConsumerを分け、処理依頼と実行を分離した
-- `ExecutorService` を使ってConsumerを別スレッドで動かす構成を確認した
-- 同期処理と非同期処理の違いを整理した
-- Kafkaの基本構造をJava標準ライブラリで抽象的に理解した
+- Javaの `BlockingQueue` を使い、Producer-Consumer構成を実装した
+- `ExecutorService` を使って、処理を別スレッドで実行する方法を確認した
+- `Runnable`、`volatile`、`InterruptedException` の基本的な扱いを学習した
+- 同期処理と非同期処理の違いを、処理の流れと失敗時の影響から整理した
+- キューを使って処理依頼側と処理実行側を分離する練習を行った
 
 ### 作業所感
 
-`BlockingQueue` でProducer-Consumerを実装すると、Kafkaが担っている役割を小さく理解できた。非同期化すると業務処理の応答は軽くなるが、通知処理の失敗が利用者に見えづらくなるため、後続のRetryやDLQの設計が必要になる。`expenses` の通知Consumerは複数の処理をまとめているため、将来的には処理単位ごとに分けた方が修正しやすいと感じた。
+`java.util.concurrent` を使うことで、非同期処理の基本構造をフレームワークなしで理解できた。特に `BlockingQueue` は、依頼された処理を順番に受け渡す仕組みとして分かりやすかった。一方で、スレッド停止や割り込み処理を考慮しないと安全に終了できないため、非同期処理では正常系だけでなく終了処理も設計する必要があると感じた。
