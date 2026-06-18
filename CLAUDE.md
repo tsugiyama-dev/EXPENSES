@@ -31,7 +31,7 @@ Spring Boot 製の**経費申請アプリ**を段階的に拡張する学習プ�
 |------|------|--------|
 | **A：新機能フェーズ** | Phase 3 → Phase 4 と段階的に新技術を追加 | Phase 3 をユーザーが実装中。完了報告待ち |
 | **B 第1弾：再学習テーマ** | 既存実装を整理＋再実装して知識定着 | ✅ **テーマ 1〜5（+3.5）すべて完了** |
-| **B 第2弾：Kafka/Redis/WS 深化** | 復習＋新機能ハイブリッド | テーマ 6・7 完了、テーマ 8 未着手 |
+| **B 第2弾：Kafka/Redis/WS 深化** | 復習＋新機能ハイブリッド | ✅ **テーマ 6・7・8 すべて完了** |
 
 **計画 A と B は独立している。** ユーザーの都合でいつでも切り替えてよい。
 
@@ -41,8 +41,7 @@ Spring Boot 製の**経費申請アプリ**を段階的に拡張する学習プ�
 
 ### 計画 B について
 - テーマ 1〜5 と割込みのテーマ 3.5 はすべて完了・ユーザー反映済み
-- 第2弾（テーマ 6〜8）も進行中。テーマ 6（Kafka DLT）・テーマ 7（Redis キャッシュ）完了済み
-- テーマ 8（WebSocket セキュリティ）は未着手
+- 第2弾（テーマ 6〜8）はすべて完了・ユーザー反映済み
 
 ---
 
@@ -91,7 +90,7 @@ Claude が完成版ブランチを作成 → ユーザーが読んで理解 → 
 |--------|------|--------------------------|------|
 | テーマ 6 | Kafka Dead Letter Topic（`@RetryableTopic` + `@DltHandler`） | `claude/refactor-theme6-kafka-dlt` | ✅ 完了・反映済み |
 | テーマ 7 | Redis キャッシュ（`@Cacheable` / `@CacheEvict` / `RedisCacheManager`） | `claude/refactor-theme7-redis-cache` | ✅ 完了・反映済み |
-| テーマ 8 | WebSocket セキュリティ（STOMP `ChannelInterceptor`） | 未作成 | 未着手 |
+| テーマ 8 | WebSocket セキュリティ（STOMP `ChannelInterceptor`） | `claude/refactor-theme8-ws-security` | ✅ 完了・反映済み |
 
 ---
 
@@ -254,6 +253,35 @@ DB に保存しておきログイン時に表示する。
     直後の別スレッドが古いデータを再キャッシュするレースコンディションが発生する
 - **`@EnableCaching` 必須**
   - ないと `@Cacheable` / `@CacheEvict` が Spring AOP に無視される
+
+---
+
+### ✅ テーマ 8：WebSocket セキュリティ（完了）
+**ブランチ：** `claude/refactor-theme8-ws-security`
+
+変更内容：
+- `StompAuthChannelInterceptor.java`（新規）：`ChannelInterceptor` を実装し `preSend()` で STOMP フレームを検査
+  - `CONNECT`：`accessor.getUser()` が null（未ログイン）なら例外で接続を拒否
+  - `SUBSCRIBE /topic/**`：`ROLE_APPROVER` を持つユーザーのみ許可。一般ユーザーは拒否
+  - `SUBSCRIBE /user/**`：Spring が Principal 名でルーティングするので追加チェック不要（素通し）
+  - `command == null`（ハートビート等）：そのまま通す
+- `WebSocketConfig.java`：`configureClientInboundChannel()` をオーバーライドしてインターセプター登録
+
+学習ポイント：
+- **なぜ HTTP Security だけでは足りないか**
+  - `authorizeHttpRequests` は HTTP リクエストにしか効かない
+  - WebSocket 確立後の STOMP フレーム（CONNECT/SUBSCRIBE/SEND）は HTTP ではないため素通しになる
+- **Principal の出所**
+  - ハンドシェイク時に HttpSession の `Authentication` が WebSocket セッションの Principal として自動引き継ぎ
+  - `accessor.getUser()` を `Authentication` にキャストして `getAuthorities()` で権限チェックできる
+- **`preSend` で例外を投げると**
+  - フレームがブローカーに到達せずクライアントに STOMP ERROR フレームが返る
+- **Inbound vs Outbound**
+  - `configureClientInboundChannel`：クライアント → サーバーの入口（今回はこれ）
+  - `configureClientOutboundChannel`：サーバー → クライアントの出口（送信を絞りたい場合）
+- **設計判断：`/topic` は承認者のみ**
+  - 提出通知は承認者向けブロードキャストなので、一般申請者は `/user/queue` で十分
+  - 一般申請者が `/topic/notifications` を購読しようとすると InterceptorがERRORを返す
 
 ---
 
