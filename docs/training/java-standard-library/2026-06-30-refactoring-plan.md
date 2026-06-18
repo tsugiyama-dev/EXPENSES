@@ -93,12 +93,12 @@ Java標準ライブラリで学んだ設計要素を、`expenses` の `feature/o
 
 ### 作業概要
 
-- これまでのJava標準ライブラリ学習内容を実リポジトリのリファクタ計画へ変換した
-- `ExpenseService`、通知Consumer、Cache、Export、Mapper、Observabilityの改善候補を整理した
-- テスト追加、命名修正、責務分割の順で進める方針を作成した
-- GitHub IssueやPRに分けやすい作業単位へ分割した
-- リファクタ時の優先順位と注意点をまとめた
+- これまで学習したJava標準ライブラリと設計要素を振り返った
+- `enum`、`record`、`interface`、`Optional`、`ConcurrentHashMap`、`ExecutorService`、`BufferedWriter` の使いどころを整理した
+- Observer、Producer-Consumer、Strategy、Factory、Decorator、Commandの特徴を復習した
+- 学習した内容を、保守しやすいコードを書くための観点として分類した
+- 今後のJava学習で優先して深掘りする項目を整理した
 
 ### 作業所感
 
-学習内容を実コードへ戻して考えると、いきなり大きく設計変更するよりも、テスト追加と小さな修正から始める方が安全だと感じた。特に通知Consumerや`ExpenseService`は責務が増えているため、変更前に振る舞いを固定する必要がある。今後はこの計画をもとに、影響範囲の小さいPRから順に進めるのが実務上扱いやすいと考えた。
+複数日に分けてJava標準ライブラリと設計パターンを学習したことで、フレームワークの機能も基本的にはJavaの言語機能や標準APIの組み合わせで理解できると感じた。特に `interface` による抽象化、`record` によるデータ表現、`ExecutorService` による非同期処理は実務でも利用頻度が高いと考えられる。今後は、今回作成した小さなサンプルをもとに、テストコードの作成や例外設計をさらに深掘りしたい。
