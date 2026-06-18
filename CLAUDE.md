@@ -32,6 +32,7 @@ Spring Boot 製の**経費申請アプリ**を段階的に拡張する学習プ�
 | **A：新機能フェーズ** | Phase 3 → Phase 4 と段階的に新技術を追加 | Phase 3 をユーザーが実装中。完了報告待ち |
 | **B 第1弾：再学習テーマ** | 既存実装を整理＋再実装して知識定着 | ✅ **テーマ 1〜5（+3.5）すべて完了** |
 | **B 第2弾：Kafka/Redis/WS 深化** | 復習＋新機能ハイブリッド | ✅ **テーマ 6・7・8 すべて完了** |
+| **B 第3弾：信頼性・障害対応** | イベント駆動パイプラインの本番品質化 | テーマ 9（Outbox）から着手 |
 
 **計画 A と B は独立している。** ユーザーの都合でいつでも切り替えてよい。
 
@@ -91,6 +92,27 @@ Claude が完成版ブランチを作成 → ユーザーが読んで理解 → 
 | テーマ 6 | Kafka Dead Letter Topic（`@RetryableTopic` + `@DltHandler`） | `claude/refactor-theme6-kafka-dlt` | ✅ 完了・反映済み |
 | テーマ 7 | Redis キャッシュ（`@Cacheable` / `@CacheEvict` / `RedisCacheManager`） | `claude/refactor-theme7-redis-cache` | ✅ 完了・反映済み |
 | テーマ 8 | WebSocket セキュリティ（STOMP `ChannelInterceptor`） | `claude/refactor-theme8-ws-security` | ✅ 完了・反映済み |
+
+### B 第3弾：信頼性・障害対応テーマ一覧
+
+**狙い：** 第2弾で作ったイベント駆動パイプラインの「穴」を塞ぎ本番品質にする。
+3テーマで「確実に送る → 重複しても安全 → 外部障害でも倒れない」が完成する。
+
+| テーマ | 内容 | Claude ブランチ（模範実装） | 状態 |
+|--------|------|--------------------------|------|
+| テーマ 9 | Transactional Outbox パターン（Kafka 確実送信） | `claude/refactor-theme9-outbox`（予定） | 着手予定 |
+| テーマ 10 | Consumer 冪等性 / 重複排除 | `claude/refactor-theme10-idempotency`（予定） | 未着手 |
+| テーマ 11 | Resilience4j サーキットブレーカー | `claude/refactor-theme11-resilience`（予定） | 未着手 |
+
+**各テーマで解こうとしている課題：**
+- **テーマ 9**：`@TransactionalEventListener(AFTER_COMMIT)` は DB コミット後に Kafka publish するが、
+  その間にアプリがクラッシュするとイベントが消える（DB と Kafka は原子的でない）。
+  → イベントを業務データと同じトランザクションで `outbox` テーブルに書き、
+    別プロセス（リレー）が未送信行を読んで Kafka に送ることで at-least-once を保証する。
+- **テーマ 10**：テーマ6のリトライ + Outbox の at-least-once により、同じメッセージが複数回届く。
+  → 処理済みメッセージ ID を記録（`processed_messages`）して重複をスキップ、または冪等な処理にする。
+- **テーマ 11**：`NotificationService` のメール送信（SMTP）が落ちると Consumer が連続失敗し DLT が溢れる。
+  → `@CircuitBreaker` + `@Retry` + フォールバックで高速失敗・グレースフルデグレードする。
 
 ---
 
