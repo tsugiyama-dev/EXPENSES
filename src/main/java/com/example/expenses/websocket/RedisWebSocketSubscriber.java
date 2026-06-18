@@ -33,24 +33,27 @@ public class RedisWebSocketSubscriber {
 	
 	public void onMessage(NotificationMessage message) {
 		
+		// 宛先をローカル変数に退避してから message からは消す。
+		// 以降のルーティング判定・送信は必ずこの destination を使う
+		// （message.getDestination() は null になっているため参照すると NPE になる）。
 		String destination = message.getDestination();
 		// クライアントにルーティング情報を送らないようにする
 		message.setDestination(null);
 		log.debug("Redis subscribe: destination= {}, expenseId= {}",
 				  destination,
 				  message.getExpenseId());
-		
-		if(message.getDestination().startsWith("/topic")) {
-			
+
+		if(destination.startsWith("/topic")) {
+
 			// 全体向けブロードキャスト
 			messagingTemplate.convertAndSend(destination, message);
 		}else {
 			//　個人あて(/queue/notifications) -> /user/{email}/queue/notifications へ転送
 			messagingTemplate.convertAndSendToUser(
 					message.getApplicantEmail(),
-					message.getDestination(), 
+					destination,
 					message);
-			
+
 		}
 	}
 	
