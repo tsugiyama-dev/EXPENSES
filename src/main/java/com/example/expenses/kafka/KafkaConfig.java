@@ -1,13 +1,9 @@
 package com.example.expenses.kafka;
 
-import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
@@ -18,7 +14,6 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.support.serializer.JacksonJsonDeserializer;
-import org.springframework.kafka.support.serializer.JacksonJsonSerializer;
 
 @Configuration
 @EnableKafka
@@ -26,11 +21,11 @@ public class KafkaConfig {
 
 	@Bean
 	ProducerFactory<String, ExpenseEventMessage> expenseEventProducerFactory(
-			@Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
-		Map<String, Object> props = new HashMap<>();
-		props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-		props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-		props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JacksonJsonSerializer.class);
+			KafkaProperties kafkaProperties) {
+		
+		// application.propertiesから設定情報取得
+		Map<String, Object> props = kafkaProperties.buildProducerProperties();
+
 		return new DefaultKafkaProducerFactory<>(props);
 	}
 
@@ -42,16 +37,17 @@ public class KafkaConfig {
 
 	@Bean
 	ConsumerFactory<String, ExpenseEventMessage> expenseEventConsumerFactory(
-			@Value("${spring.kafka.bootstrap-servers}") String bootstrapServers,
-			@Value("${spring.kafka.consumer.group-id:expenses-app}") String groupId) {
-		Map<String, Object> props = new HashMap<>();
-		props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-		props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-		props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-		props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-		props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JacksonJsonDeserializer.class);
-		props.put(JacksonJsonDeserializer.TRUSTED_PACKAGES, "com.example.expenses.kafka");
+			KafkaProperties kafkaProperties) {
+		
+		// application.properties から設定情報を取得
+		Map<String, Object> props = kafkaProperties.buildConsumerProperties();
+		// 以下は追加設定
 		props.put(JacksonJsonDeserializer.VALUE_DEFAULT_TYPE, ExpenseEventMessage.class.getName());
+		props.put(ProducerConfig.ACKS_CONFIG, "all" ); // Brokerが複数の場合、すべてのBrokerが応答を返す必要がある。
+		props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true); // Brokerに保存されたけど応答中にエラーとなり再送されたときに重複して登録されないようにする
+		props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5); // 返事を待たずに送ってよい件数
+		props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 120_000);
+		
 		return new DefaultKafkaConsumerFactory<>(props);
 	}
 

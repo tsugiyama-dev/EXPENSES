@@ -107,7 +107,7 @@ public class ExpenseKafkaNotificationConsumer {
 			return;
 		}
 
-		// 申請者が未読の場合に備えて DB に保存
+		// 申請者が未読の場合に備えて DB に保存 handleRejectedも同様
 		pendingNotificationService.save(
 				message.getApplicantId(),
 				NotificationType.EXPENSE_APPROVED.name(),
