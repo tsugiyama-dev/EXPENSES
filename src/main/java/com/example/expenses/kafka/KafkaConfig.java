@@ -2,7 +2,6 @@ package com.example.expenses.kafka;
 
 import java.util.Map;
 
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -43,10 +42,6 @@ public class KafkaConfig {
 		Map<String, Object> props = kafkaProperties.buildConsumerProperties();
 		// 以下は追加設定
 		props.put(JacksonJsonDeserializer.VALUE_DEFAULT_TYPE, ExpenseEventMessage.class.getName());
-		props.put(ProducerConfig.ACKS_CONFIG, "all" ); // Brokerが複数の場合、すべてのBrokerが応答を返す必要がある。
-		props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true); // Brokerに保存されたけど応答中にエラーとなり再送されたときに重複して登録されないようにする
-		props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5); // 返事を待たずに送ってよい件数
-		props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 120_000);
 		
 		return new DefaultKafkaConsumerFactory<>(props);
 	}
